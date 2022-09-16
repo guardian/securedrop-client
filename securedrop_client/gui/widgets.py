@@ -23,6 +23,7 @@ from gettext import gettext as _
 from typing import Dict, List, Optional, Union  # noqa: F401
 from uuid import uuid4
 
+
 import arrow
 import sqlalchemy.orm.exc
 from PyQt5.QtCore import QEvent, QObject, QSize, Qt, QTimer, pyqtBoundSignal, pyqtSignal, pyqtSlot
@@ -74,6 +75,7 @@ from securedrop_client.gui.actions import (
     DeleteSourceAction,
     DownloadConversation,
 )
+from securedrop_client.gui.format_helpers import format_datetime_local
 from securedrop_client.gui.base import SecureQLabel, SvgLabel, SvgPushButton, SvgToggleButton
 from securedrop_client.gui.conversation import DeleteConversationDialog
 from securedrop_client.gui.source import DeleteSourceDialog
@@ -1317,7 +1319,7 @@ class SourceWidget(QWidget):
         try:
             self.controller.session.refresh(self.source)
             self.last_updated = self.source.last_updated
-            self.timestamp.setText(_(arrow.get(self.source.last_updated).format(LAST_UPDATED_FORMAT)))
+            self.timestamp.setText(_(format_datetime_local(self.source.last_updated)))
             self.name.setText(self.source.journalist_designation)
 
             self.set_snippet(self.source_uuid)
@@ -3464,7 +3466,7 @@ class SourceProfileShortWidget(QWidget):
             self.MARGIN_LEFT, self.VERTICAL_MARGIN, self.MARGIN_RIGHT, self.VERTICAL_MARGIN
         )
         title = TitleLabel(self.source.journalist_designation)
-        self.updated = LastUpdatedLabel(_(arrow.get(self.source.last_updated).format(LAST_UPDATED_FORMAT)))
+        self.updated = LastUpdatedLabel(_(format_datetime_local(self.source.last_updated)))
         menu = SourceMenuButton(self.source, self.controller, app_state)
         header_layout.addWidget(title, alignment=Qt.AlignLeft)
         header_layout.addStretch()
@@ -3485,4 +3487,4 @@ class SourceProfileShortWidget(QWidget):
         Ensure the timestamp is always kept up to date with the latest activity
         from the source.
         """
-        self.updated.setText(_(arrow.get(self.source.last_updated).format(LAST_UPDATED_FORMAT)))
+        self.updated.setText(_(format_datetime_local(self.source.last_updated)))

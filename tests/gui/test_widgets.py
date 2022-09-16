@@ -19,6 +19,7 @@ from sqlalchemy.orm import attributes, scoped_session, sessionmaker
 from securedrop_client import db, logic, storage
 from securedrop_client.app import threads
 from securedrop_client.gui.source import DeleteSourceDialog
+from securedrop_client.gui.format_helpers import format_datetime_local
 from securedrop_client.gui.widgets import (
     ActivityStatusBar,
     ConversationView,
@@ -3746,7 +3747,7 @@ def test_SourceConversationWrapper_on_conversation_updated(mocker, qtbot):
 
     scw.conversation_view.add_file(file=file, index=1)
 
-    expected_timestamp = arrow.get(source.last_updated).format("MMM D, HH:mm")
+    expected_timestamp = format_datetime_local(source.last_updated)
 
     def check_timestamp():
         assert scw.conversation_title_bar.updated.text() == expected_timestamp
@@ -5216,7 +5217,7 @@ def test_SourceProfileShortWidget_update_timestamp(mocker):
     spsw.updated = mocker.MagicMock()
     spsw.update_timestamp()
     spsw.updated.setText.assert_called_once_with(
-        arrow.get(mock_source.last_updated).format("MMM D, HH:mm")
+        format_datetime_local(mock_source.last_updated)
     )
 
 
