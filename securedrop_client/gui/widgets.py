@@ -87,6 +87,7 @@ logger = logging.getLogger(__name__)
 
 MINIMUM_ANIMATION_DURATION_IN_MILLISECONDS = 300
 NO_DELAY = 1
+LAST_UPDATED_FORMAT = "MMM D, HH:mm"
 
 
 class TopPane(QWidget):
@@ -1189,7 +1190,7 @@ class SourceWidget(QWidget):
     SPACER = 14
     BOTTOM_SPACER = 11
     STAR_WIDTH = 20
-    TIMESTAMP_WIDTH = 60
+    TIMESTAMP_WIDTH = 70
 
     SOURCE_NAME_CSS = load_css("source_name.css")
     SOURCE_PREVIEW_CSS = load_css("source_preview.css")
@@ -1280,11 +1281,11 @@ class SourceWidget(QWidget):
         self.spacer.setFixedWidth(self.SPACER)
         source_widget_layout.addWidget(self.spacer, 0, 1, 1, 1)
         source_widget_layout.addWidget(self.name, 0, 2, 1, 1)
-        source_widget_layout.addWidget(self.paperclip, 0, 3, 1, 1)
+        source_widget_layout.addWidget(self.paperclip, 0, 3, 1, 1, alignment=Qt.AlignRight)
         source_widget_layout.addWidget(self.paperclip_disabled, 0, 3, 1, 1)
         source_widget_layout.addWidget(self.preview, 1, 2, 1, 1, alignment=Qt.AlignLeft)
         source_widget_layout.addWidget(self.deletion_indicator, 1, 2, 1, 1)
-        source_widget_layout.addWidget(self.timestamp, 1, 3, 1, 1)
+        source_widget_layout.addWidget(self.timestamp, 1, 3, 1, 1, alignment=Qt.AlignRight)
         source_widget_layout.addItem(QSpacerItem(self.BOTTOM_SPACER, self.BOTTOM_SPACER))
         self.source_widget.setLayout(source_widget_layout)
         layout = QHBoxLayout(self)
@@ -1316,7 +1317,7 @@ class SourceWidget(QWidget):
         try:
             self.controller.session.refresh(self.source)
             self.last_updated = self.source.last_updated
-            self.timestamp.setText(_(arrow.get(self.source.last_updated).format("MMM D")))
+            self.timestamp.setText(_(arrow.get(self.source.last_updated).format(LAST_UPDATED_FORMAT)))
             self.name.setText(self.source.journalist_designation)
 
             self.set_snippet(self.source_uuid)
@@ -3463,7 +3464,7 @@ class SourceProfileShortWidget(QWidget):
             self.MARGIN_LEFT, self.VERTICAL_MARGIN, self.MARGIN_RIGHT, self.VERTICAL_MARGIN
         )
         title = TitleLabel(self.source.journalist_designation)
-        self.updated = LastUpdatedLabel(_(arrow.get(self.source.last_updated).format("MMM D")))
+        self.updated = LastUpdatedLabel(_(arrow.get(self.source.last_updated).format(LAST_UPDATED_FORMAT)))
         menu = SourceMenuButton(self.source, self.controller, app_state)
         header_layout.addWidget(title, alignment=Qt.AlignLeft)
         header_layout.addStretch()
@@ -3484,4 +3485,4 @@ class SourceProfileShortWidget(QWidget):
         Ensure the timestamp is always kept up to date with the latest activity
         from the source.
         """
-        self.updated.setText(_(arrow.get(self.source.last_updated).format("MMM D")))
+        self.updated.setText(_(arrow.get(self.source.last_updated).format(LAST_UPDATED_FORMAT)))

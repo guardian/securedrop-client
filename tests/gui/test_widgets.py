@@ -3746,7 +3746,7 @@ def test_SourceConversationWrapper_on_conversation_updated(mocker, qtbot):
 
     scw.conversation_view.add_file(file=file, index=1)
 
-    expected_timestamp = arrow.get(source.last_updated).format("MMM D")
+    expected_timestamp = arrow.get(source.last_updated).format("MMM D, HH:mm")
 
     def check_timestamp():
         assert scw.conversation_title_bar.updated.text() == expected_timestamp
@@ -5216,7 +5216,7 @@ def test_SourceProfileShortWidget_update_timestamp(mocker):
     spsw.updated = mocker.MagicMock()
     spsw.update_timestamp()
     spsw.updated.setText.assert_called_once_with(
-        arrow.get(mock_source.last_updated).format("MMM D")
+        arrow.get(mock_source.last_updated).format("MMM D, HH:mm")
     )
 
 
