@@ -56,6 +56,7 @@ from PyQt5.QtWidgets import (
     QToolButton,
     QVBoxLayout,
     QWidget,
+    QToolBar
 )
 
 from securedrop_client import export, state
@@ -81,6 +82,8 @@ from securedrop_client.logic import Controller
 from securedrop_client.resources import load_css, load_icon, load_image, load_movie
 from securedrop_client.storage import source_exists
 from securedrop_client.utils import humanize_filesize
+
+from securedrop_client.export_sources import get_source
 
 logger = logging.getLogger(__name__)
 
@@ -606,7 +609,16 @@ class MainView(QWidget):
         self.view_layout.addWidget(self.empty_conversation_view)
 
         # Add widgets to layout
-        self.layout.addWidget(self.source_list, stretch=1)
+        self.sources_pane_holder = QWidget()
+        self.sources_pane_holder.setObjectName("MainView_sources_pane_holder")
+
+        self.sources_toolbar = SourceListToolbar()
+        self.sources_pane_layout = QVBoxLayout()
+        self.sources_pane_holder.setLayout(self.sources_pane_layout)
+        self.sources_pane_layout.addWidget(self.sources_toolbar)
+        self.sources_pane_layout.addWidget(self.source_list)
+
+        self.layout.addWidget(self.sources_pane_holder, stretch=1)
         self.layout.addWidget(self.view_holder, stretch=2)
 
         # Note: We should not delete SourceConversationWrapper when its source is unselected. This
@@ -619,6 +631,7 @@ class MainView(QWidget):
         """
         self.controller = controller
         self.source_list.setup(controller)
+        self.sources_toolbar.setup(controller)
 
     def show_sources(self, sources: List[Source]) -> None:
         """
@@ -829,6 +842,23 @@ class SourceListWidgetItem(QListWidgetItem):
             other_ts = arrow.get(them.last_updated)
             return my_ts < other_ts
         return True
+
+class SourceListToolbar(QToolBar):
+
+    def export(self):
+        get_source(self.controller.session)
+        print("Export!")
+
+    def setup(self, controller: Controller):
+        self.controller = controller
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("SourceListToolbar")
+
+        action_export = QAction(QIcon(load_image("send.svg")), "Export", self)
+        action_export.triggered.connect(self.export)
+        self.addAction(action_export)
 
 
 class SourceList(QListWidget):
