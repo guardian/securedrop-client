@@ -568,7 +568,9 @@ class Controller(QObject):
         # Failed to authenticate. Reset state with failure message.
         self.invalidate_token()
 
-        if isinstance(result, (RequestTimeoutError, ServerConnectionError)):
+        if isinstance(result, RequestTimeoutError):
+            error = "The request to the SecureDrop server timed out"
+        elif isinstance(result, ServerConnectionError):
             error = _(
                 "Could not reach the SecureDrop server. Please check your \n"
                 "Internet and Tor connection and try again."
