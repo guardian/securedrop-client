@@ -572,7 +572,7 @@ class Controller(QObject):
             error = "The request to the SecureDrop server timed out"
         elif isinstance(result, ServerConnectionError):
             error = _(
-                "Could not reach the SecureDrop server. Please check your \n"
+                "Could not reach the SecureDrop server! Please check your \n"
                 "Internet and Tor connection and try again."
             )
         elif isinstance(result, AuthError):

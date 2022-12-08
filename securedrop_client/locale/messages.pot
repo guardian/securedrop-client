@@ -23,7 +23,7 @@ msgid "The SecureDrop server cannot be reached. Trying to reconnect..."
 msgstr ""
 
 msgid ""
-"Could not reach the SecureDrop server. Please check your \n"
+"Could not reach the SecureDrop server! Please check your \n"
 "Internet and Tor connection and try again."
 msgstr ""
 
