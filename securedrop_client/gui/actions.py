@@ -23,6 +23,7 @@ from securedrop_client.gui.conversation import (
 )
 from securedrop_client.logic import Controller
 from securedrop_client.utils import safe_mkdir
+from securedrop_client.resources import load_icon
 
 
 class DownloadConversation(QAction):
@@ -114,7 +115,8 @@ class DeleteSourcesAction(QAction):
         self._confirmation_dialog = confirmation_dialog
         text = _("Delete Multiple Source Accounts")
 
-        super().__init__(text, parent)
+        # load_icon("trash.png"),
+        super().__init__(text, parent=parent)
         self.triggered.connect(self.trigger)
 
     def trigger(self) -> None:
