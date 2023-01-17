@@ -105,9 +105,9 @@ class DeleteSourcesAction(QAction):
         self._confirmation_dialog = confirmation_dialog
         text = _("Delete Multiple Source Accounts")
 
-        # load_icon("trash.png"),
         super().__init__(text, parent=parent)
         self.triggered.connect(self.trigger)
+        self.setEnabled(False)  # disabled until sources are selected
 
     def trigger(self) -> None:
         sources = list(self.controller.checked_sources)
