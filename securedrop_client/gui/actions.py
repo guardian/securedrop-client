@@ -113,7 +113,7 @@ class DeleteSourcesAction(QAction):
     ) -> None:
         self.controller = controller
         self._confirmation_dialog = confirmation_dialog
-        text = _("Delete Multiple Source Accounts")
+        text = _("Delete Source Accounts")
 
         super().__init__(text, parent=parent)
         self.triggered.connect(self.trigger)
@@ -121,7 +121,6 @@ class DeleteSourcesAction(QAction):
 
     def trigger(self) -> None:
         sources = list(self.controller.checked_sources)
-        print(sources)
 
         if self.controller.api is None:
             self.controller.on_action_requiring_login()
