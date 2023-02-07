@@ -26,6 +26,7 @@ from securedrop_client.utils import safe_mkdir
 from securedrop_client.resources import load_icon
 
 
+
 class DownloadConversation(QAction):
     """Download all files and messages of the currently selected conversation."""
 
@@ -120,13 +121,15 @@ class DeleteSourcesAction(QAction):
         self.setEnabled(False)  # disabled until sources are selected
 
     def trigger(self) -> None:
-        sources = list(self.controller.checked_sources)
+        checked_sources = self.controller.get_checked_sources()
 
         if self.controller.api is None:
             self.controller.on_action_requiring_login()
         else:
-            confirmation_dialog = self._confirmation_dialog(sources)
-            confirmation_dialog.accepted.connect(lambda: self.controller.delete_sources(sources))
+            confirmation_dialog = self._confirmation_dialog(checked_sources)
+            confirmation_dialog.accepted.connect(
+                lambda: self.controller.delete_sources(checked_sources)
+            )
             confirmation_dialog.exec()
 
 
