@@ -24,12 +24,13 @@ import uuid
 from datetime import datetime
 from gettext import gettext as _
 from gettext import ngettext
-from typing import Dict, List, Optional, Type, Union
+from typing import Dict, List, Optional, Set, Type, Union
 
 import arrow
 import sdclientapi
 import sqlalchemy.orm.exc
 from PyQt5.QtCore import QObject, QProcess, QThread, QTimer, pyqtSignal, pyqtSlot
+from PyQt5.QtWidgets import QCheckBox
 from sdclientapi import AuthError, RequestTimeoutError, ServerConnectionError
 from sqlalchemy.orm.session import sessionmaker
 
@@ -417,6 +418,22 @@ class Controller(QObject):
             and oct(os.stat(self.last_sync_filepath).st_mode) != "0o100600"
         ):
             os.chmod(self.last_sync_filepath, 0o600)
+
+    def get_checked_sources(self) -> List[str]:
+        """
+        Returns the list of sources that are checked in the UI.
+        """
+        source_items = self.gui.main_view.source_list.source_items
+        checked_source_uuids = []
+        for source_uuid, source_item in source_items.items():
+            source_item_widget = self.gui.main_view.source_list.itemWidget(source_item)
+            checkbox = source_item_widget.findChild(QCheckBox)
+            if checkbox.isChecked():
+                checked_source_uuids.append(source_uuid)
+        return checked_source_uuids
+
+    def maybe_toggle_delete_sources_button_enabled(self):
+        self.gui.toggle_delete_sources_button_enabled(len(self.get_checked_sources()) > 0)
 
     @pyqtSlot(int)
     def _on_main_queue_updated(self, num_items: int) -> None:
@@ -1036,6 +1053,24 @@ class Controller(QObject):
 
         self.add_job.emit(job)
         self.source_deleted.emit(source.uuid)
+
+    @login_required
+    def delete_sources(self, sources: List[str]) -> None:
+        """
+        Performs a delete operation on multiple source records.
+
+        This method will submit a job per source to delete the source record on
+        the server. If the job succeeds, the success handler will
+        synchronize the server records with the local state. If not,
+        the failure handler will display an error.
+        """
+        for source_uuid in sources:
+            job = DeleteSourceJob(source_uuid)
+            job.success_signal.connect(self.on_delete_source_success)
+            job.failure_signal.connect(self.on_delete_source_failure)
+
+            self.add_job.emit(job)
+            self.source_deleted.emit(source_uuid)
 
     @login_required
     def delete_conversation(self, source: db.Source) -> None:

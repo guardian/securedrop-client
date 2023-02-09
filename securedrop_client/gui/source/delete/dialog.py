@@ -17,6 +17,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 from gettext import gettext as _
+from gettext import ngettext
+from typing import List
 
 from securedrop_client.db import Source
 from securedrop_client.gui.base import ModalDialog
@@ -60,3 +62,49 @@ class DeleteSourceDialog(ModalDialog):
         return "".join(message_tuple).format(
             source="<b>{}</b>".format(self.source.journalist_designation)
         )
+
+
+class DeleteSourcesDialog(ModalDialog):
+    """Used to confirm deletion of multiple source accounts."""
+
+    def __init__(self, sources: List[str]) -> None:
+        super().__init__(show_header=False, dangerous=True)
+
+        self.sources = sources
+
+        self.body.setText(self.make_body_text())
+        self.continue_button.setText(_("YES, DELETE THESE SOURCE ACCOUNTS"))
+        self.cancel_button.setDefault(True)
+        self.cancel_button.setFocus()
+        self.confirmation_label.setText(_("Are you sure this is what you want?"))
+        self.adjustSize()
+
+    def make_body_text(self) -> str:
+        num_sources = len(self.sources)
+        message_tuple = (
+            "<style>",
+            "p {{white-space: nowrap;}}",
+            "</style>",
+            "<p><b>",
+            ngettext(
+                "You are about to delete 1 source account",
+                f"You are about to delete {num_sources} accounts",
+                num_sources,
+            ),
+            "</b></p>",
+            "<p><b>",
+            _("When the entire accounts for these sources are deleted:"),
+            "</b></p>",
+            "<p><b>\u2219</b>&nbsp;",
+            _("The sources will not be able to log in with their codename again."),
+            "</p>",
+            "<p><b>\u2219</b>&nbsp;",
+            _("Your organization will not be able to send them replies."),
+            "</p>",
+            "<p><b>\u2219</b>&nbsp;",
+            _("All files and messages from the sources will also be destroyed."),
+            "</p>",
+            "<p>&nbsp;</p>",
+        )
+
+        return "".join(message_tuple)

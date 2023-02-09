@@ -5,7 +5,7 @@ Over time, this module could become the interface between
 the GUI and the controller.
 """
 from gettext import gettext as _
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 from PyQt5.QtCore import Qt, pyqtSlot
 from PyQt5.QtWidgets import QAction, QDialog, QMenu
@@ -89,6 +89,36 @@ class DeleteSourceAction(QAction):
             self.controller.on_action_requiring_login()
         else:
             self._confirmation_dialog.exec()
+
+
+class DeleteSourcesAction(QAction):
+    """Use this action to delete multiple source records."""
+
+    def __init__(
+        self,
+        parent: QMenu,
+        controller: Controller,
+        confirmation_dialog: Callable[[List[str]], QDialog],
+    ) -> None:
+        self.controller = controller
+        self._confirmation_dialog = confirmation_dialog
+        text = _("Delete Source Accounts")
+
+        super().__init__(text, parent=parent)
+        self.triggered.connect(self.trigger)
+        self.setEnabled(False)  # disabled until sources are selected
+
+    def trigger(self) -> None:
+        checked_sources = self.controller.get_checked_sources()
+
+        if self.controller.api is None:
+            self.controller.on_action_requiring_login()
+        else:
+            confirmation_dialog = self._confirmation_dialog(checked_sources)
+            confirmation_dialog.accepted.connect(
+                lambda: self.controller.delete_sources(checked_sources)
+            )
+            confirmation_dialog.exec()
 
 
 class DeleteConversationAction(QAction):

@@ -43,6 +43,7 @@ from PyQt5.QtGui import (
 )
 from PyQt5.QtWidgets import (
     QAction,
+    QCheckBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -55,6 +56,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
     QSpacerItem,
     QStatusBar,
+    QToolBar,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -74,11 +76,13 @@ from securedrop_client.gui import conversation
 from securedrop_client.gui.actions import (
     DeleteConversationAction,
     DeleteSourceAction,
+    DeleteSourcesAction,
     DownloadConversation,
 )
 from securedrop_client.gui.base import SecureQLabel, SvgLabel, SvgPushButton, SvgToggleButton
 from securedrop_client.gui.conversation import DeleteConversationDialog
 from securedrop_client.gui.source import DeleteSourceDialog
+from securedrop_client.gui.source.delete.dialog import DeleteSourcesDialog
 from securedrop_client.logic import Controller
 from securedrop_client.resources import load_css, load_icon, load_image, load_movie
 from securedrop_client.storage import source_exists
@@ -642,8 +646,19 @@ class MainView(QWidget):
         self.empty_conversation_view = EmptyConversationView()
         self.view_layout.addWidget(self.empty_conversation_view)
 
-        # Add widgets to layout
-        self._layout.addWidget(self.source_list, stretch=1)
+        self.sources_pane_holder = QWidget()
+        # self.sources_pane_holder.setMaximumWidth(540)
+        self.sources_pane_holder.setObjectName("MainView_sources_pane_holder")
+        self.sources_pane_layout = QVBoxLayout()
+        self.sources_pane_layout.setContentsMargins(0, 0, 0, 0)
+        self.sources_pane_layout.setSpacing(0)
+        self.sources_pane_holder.setLayout(self.sources_pane_layout)
+
+        self.sources_toolbar = SourceListToolbar()
+        self.sources_pane_layout.addWidget(self.sources_toolbar)
+        self.sources_pane_layout.addWidget(self.source_list)
+
+        self._layout.addWidget(self.sources_pane_holder, stretch=1)
         self._layout.addWidget(self.view_holder, stretch=2)
 
         # Note: We should not delete SourceConversationWrapper when its source is unselected. This
@@ -656,6 +671,7 @@ class MainView(QWidget):
         """
         self.controller = controller
         self.source_list.setup(controller)
+        self.sources_toolbar.setup(controller)
 
     def show_sources(self, sources: List[Source]) -> None:
         """
@@ -765,6 +781,12 @@ class MainView(QWidget):
         self.view_layout.addWidget(widget)
         widget.show()
 
+    def toggle_delete_sources_button_enabled(self, enabled: bool) -> None:
+        """
+        Enable / disable the delete sources button.
+        """
+        self.sources_toolbar.delete_sources_action.setEnabled(enabled)
+
 
 class EmptyConversationView(QWidget):
 
@@ -855,6 +877,18 @@ class EmptyConversationView(QWidget):
     def show_no_source_selected_message(self) -> None:
         self.no_sources.hide()
         self.no_source_selected.show()
+
+
+class SourceListToolbar(QToolBar):
+    def setup(self, controller: Controller):
+        self.setFixedHeight(30)
+        self.controller = controller
+        self.delete_sources_action = DeleteSourcesAction(self, self.controller, DeleteSourcesDialog)
+        self.addAction(self.delete_sources_action)
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("SourceListToolbar")
 
 
 class SourceListWidgetItem(QListWidgetItem):
@@ -956,6 +990,9 @@ class SourceList(QListWidget):
 
             deleted_uuids.append(source_widget.source_uuid)
             source_widget.deleteLater()
+
+        # We may need disable the delete multiple sources button
+        self.controller.maybe_toggle_delete_sources_button_enabled()
 
         # Update the remaining widgets
         for i in range(self.count()):
@@ -1243,6 +1280,7 @@ class SourceWidget(QWidget):
     SOURCE_NAME_CSS = load_css("source_name.css")
     SOURCE_PREVIEW_CSS = load_css("source_preview.css")
     SOURCE_TIMESTAMP_CSS = load_css("source_timestamp.css")
+    SOURCE_CHECKBOX_CSS = load_css("source_checkbox.css")
 
     CONVERSATION_DELETED_TEXT = _("\u2014 All files and messages deleted for this source \u2014")
 
@@ -1303,6 +1341,11 @@ class SourceWidget(QWidget):
         self.paperclip_disabled.setSizePolicy(retain_space)
         self.paperclip_disabled.hide()
 
+        self.checkbox = QCheckBox()
+        self.checkbox.setObjectName("SourceWidget_checkbox")
+        self.checkbox.setStyleSheet(self.SOURCE_CHECKBOX_CSS)
+        self.checkbox.toggled.connect(controller.maybe_toggle_delete_sources_button_enabled)
+
         self.timestamp = QLabel()
         self.timestamp.setSizePolicy(retain_space)
         self.timestamp.setFixedWidth(self.TIMESTAMP_WIDTH)
@@ -1310,13 +1353,13 @@ class SourceWidget(QWidget):
 
         # Create source_widget:
         # -------------------------------------------------------------------
-        # | ------ | -------- | ------                   | -----------      |
-        # | |star| | |spacer| | |name|                   | |paperclip|      |
-        # | ------ | -------- | ------                   | -----------      |
+        # | ---------- | -------- | ------               | -----------      |
+        # | |  star  | | |spacer| | |name|               | |paperclip|      |
+        # | ---------- | -------- | ------               | -----------      |
         # -------------------------------------------------------------------
-        # |        |          | ---------                | -----------      |
-        # |        |          | |preview|                | |timestamp|      |
-        # |        |          | ---------                | -----------      |
+        # | ---------- |          | ---------            | -----------      |
+        # | |checkbox| |          | |preview|            | |timestamp|      |
+        # | ---------- |          | ---------            | -----------      |
         # ------------------------------------------- -----------------------
         # Column 0, 1, and 3 are fixed. Column 2 stretches.
         self.source_widget = QWidget()
@@ -1331,6 +1374,7 @@ class SourceWidget(QWidget):
         source_widget_layout.addWidget(self.name, 0, 2, 1, 1)
         source_widget_layout.addWidget(self.paperclip, 0, 3, 1, 1)
         source_widget_layout.addWidget(self.paperclip_disabled, 0, 3, 1, 1)
+        source_widget_layout.addWidget(self.checkbox, 1, 0, 1, 1)
         source_widget_layout.addWidget(self.preview, 1, 2, 1, 1, alignment=Qt.AlignLeft)
         source_widget_layout.addWidget(self.deletion_indicator, 1, 2, 1, 1)
         source_widget_layout.addWidget(self.timestamp, 1, 3, 1, 1)
