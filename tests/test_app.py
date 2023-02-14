@@ -23,12 +23,6 @@ from securedrop_client.app import (
 from tests.helper import app  # noqa: F401
 
 
-def test_application_sets_en_as_default_language_code(mocker):
-    mocker.patch("locale.getdefaultlocale", return_value=(None, None))
-    language_code = configure_locale_and_language()
-    assert language_code == "en"
-
-
 @pytest.mark.parametrize("lang", ["es"], indirect=True)
 def test_application_uses_set_locale(mocker, lang):
     """

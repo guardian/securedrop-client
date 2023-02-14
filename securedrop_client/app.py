@@ -17,7 +17,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 import gettext
-import locale
 import logging
 import os
 import platform
@@ -29,7 +28,7 @@ from contextlib import contextmanager
 from gettext import gettext as _
 from logging.handlers import SysLogHandler, TimedRotatingFileHandler
 from pathlib import Path
-from typing import Any, NewType, NoReturn
+from typing import Any, NoReturn
 
 from PyQt5.QtCore import Qt, QThread, QTimer
 from PyQt5.QtWidgets import QApplication, QMessageBox
@@ -41,9 +40,6 @@ from securedrop_client.gui.main import Window
 from securedrop_client.logic import Controller
 from securedrop_client.utils import safe_mkdir
 
-LanguageCode = NewType("LanguageCode", str)
-
-DEFAULT_LANGUAGE = LanguageCode("en")
 DEFAULT_SDC_HOME = "~/.securedrop_client"
 DESKTOP_FILE_NAME = "press.freedom.SecureDropClient.desktop"
 ENCODING = "utf-8"
@@ -68,22 +64,11 @@ def excepthook(*exc_args):  # type: ignore [no-untyped-def]
     sys.exit(1)
 
 
-def configure_locale_and_language() -> LanguageCode:
+def configure_locale_and_language() -> None:
     """Configure locale, language and define location of translation assets."""
     localedir = os.path.abspath(os.path.join(os.path.dirname(__file__), "locale"))
-    try:
-        # Use the operating system's locale.
-        current_locale, encoding = locale.getdefaultlocale()
-        # Get the language code.
-        if current_locale is None:
-            code = DEFAULT_LANGUAGE
-        else:
-            code = LanguageCode(current_locale[:2])
-    except ValueError:  # pragma: no cover
-        code = DEFAULT_LANGUAGE  # pragma: no cover
     gettext.bindtextdomain(GETTEXT_DOMAIN, localedir=localedir)
     gettext.textdomain(GETTEXT_DOMAIN)
-    return code
 
 
 def configure_logging(sdc_home: Path) -> None:

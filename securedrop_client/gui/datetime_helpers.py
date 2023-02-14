@@ -8,12 +8,14 @@ import arrow
 from dateutil import tz
 from PyQt5.QtCore import QTimeZone
 
+from securedrop_client.locale import get_locale
+
 
 def format_datetime_month_day(date: datetime.datetime) -> str:
     """
-    Formats date as e.g. Sep 16
+    Formats date as e.g. Sep 16 in the current locale
     """
-    return arrow.get(date).format("MMM D")
+    return arrow.get(date).format("MMM D", locale=get_locale())
 
 
 def localise_datetime(date: datetime.datetime) -> datetime.datetime:
