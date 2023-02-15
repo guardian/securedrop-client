@@ -10,12 +10,13 @@ from securedrop_client.gui.datetime_helpers import (
 )
 
 
-def test_format_datetime_month_day():
-    # Dates are shown in the source list as well as the conversation view. Changing the date format
-    # may result in UI issues - this test is a reminder to check both views!
-    midnight_january_london = datetime.datetime(2023, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
+def test_format_datetime_month_day(mocker):
+    # Dates are shown in the source list as well as the conversation view. Changing the date format may result in UI
+    # issues - this test is a reminder to check both views!
+    mocker.patch("PyQt5.QtCore.QLocale.name", return_value="fr_FR")
+    midnight_january_london = datetime.datetime(2023, 2, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
 
-    assert format_datetime_month_day(midnight_january_london) == "Jan 1"
+    assert format_datetime_month_day(midnight_january_london) == "févr 1"
 
 
 def test_localise_datetime(mocker):
@@ -32,3 +33,4 @@ def test_format_datetime_local(mocker):
                  return_value=QByteArray(b"Pacific/Auckland"))
     evening_january_1_london = datetime.datetime(2023, 1, 1, 18, 0, 0, tzinfo=datetime.timezone.utc)
     assert format_datetime_local(evening_january_1_london) == "Jan 2"
+
