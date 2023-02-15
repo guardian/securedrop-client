@@ -88,6 +88,12 @@ msgstr ""
 msgid "Delete All Files and Messages"
 msgstr ""
 
+msgid "Print Conversation Transcript"
+msgstr ""
+
+msgid "Export Conversation Transcript"
+msgstr ""
+
 msgid "SecureDrop Client {}"
 msgstr ""
 
