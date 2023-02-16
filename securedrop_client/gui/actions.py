@@ -22,9 +22,8 @@ from securedrop_client.gui.conversation import (
     PrintTranscriptDialog as PrintConversationTranscriptDialog,
 )
 from securedrop_client.logic import Controller
-from securedrop_client.utils import safe_mkdir
 from securedrop_client.resources import load_icon
-
+from securedrop_client.utils import safe_mkdir
 
 
 class DownloadConversation(QAction):
