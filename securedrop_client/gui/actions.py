@@ -259,10 +259,11 @@ class ExportConversationTranscriptAction(QAction):  # pragma: nocover
         (Re-)generates the conversation transcript and opens a confirmation dialog to export it,
         in the manner of the existing ExportFileDialog.
         """
+        transcript_filename = _("{}_transcript.txt").format(self._source.journalist_filename)
         file_path = (
             Path(self.controller.data_dir)
             .joinpath(self._source.journalist_filename)
-            .joinpath("transcript.txt")
+            .joinpath(transcript_filename)
         )
 
         transcript = ConversationTranscript(self._source)
@@ -280,13 +281,13 @@ class ExportConversationTranscriptAction(QAction):  # pragma: nocover
         with open(file_path, "r") as f:
             if self._destination == ExportDestination.USB:
                 dialog = ExportConversationTranscriptDialog(
-                    self._export_device, "transcript.txt", str(file_path)
+                    self._export_device, transcript_filename, str(file_path)
                 )
                 dialog.exec()
             else:
                 whistleflow_dialog = WhistleflowDialog(
                     self._export_device,
-                    "transcript.txt",
+                    transcript_filename,
                     [str(file_path)],
                 )
                 whistleflow_dialog.exec()
@@ -356,10 +357,11 @@ class ExportConversationAction(QAction):  # pragma: nocover
         alongside all the (attached) files that are downloaded, in the manner
         of the existing ExportFileDialog.
         """
+        transcript_filename = _("{}_transcript.txt").format(self._source.journalist_filename)
         transcript_location = (
             Path(self.controller.data_dir)
             .joinpath(self._source.journalist_filename)
-            .joinpath("transcript.txt")
+            .joinpath(transcript_filename)
         )
 
         transcript = ConversationTranscript(self._source)
@@ -389,7 +391,7 @@ class ExportConversationAction(QAction):  # pragma: nocover
 
             file_count = len(files)
             if file_count == 1:
-                summary = "transcript.txt"
+                summary = transcript_filename
             else:
                 summary = _("all files and transcript")
 

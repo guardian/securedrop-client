@@ -71,7 +71,7 @@ class Export(QObject):
     DISK_ENCRYPTION_KEY_NAME = "encryption_key"
     DISK_EXPORT_DIR = "export_data"
 
-    WHISTLEFLOW_METADATA = {"device": "whistleflow-view"}
+    WHISTLEFLOW_METADATA = {}
 
     # Set up signals for communication with the controller
     preflight_check_call_failure = pyqtSignal(object)
@@ -237,7 +237,8 @@ class Export(QObject):
         archive_path = os.path.join(archive_dir, archive_fn)
 
         with tarfile.open(archive_path, "w:gz") as archive:
-            cls._add_virtual_file_to_archive(archive, cls.METADATA_FN, metadata)
+            if metadata:
+                cls._add_virtual_file_to_archive(archive, cls.METADATA_FN, metadata)
 
             # When more than one file is added to the archive,
             # extra care must be taken to prevent name collisions.
@@ -280,14 +281,14 @@ class Export(QObject):
         """
         filename = os.path.basename(filepath)
         arcname = os.path.join(cls.DISK_EXPORT_DIR, filename)
+
         if prevent_name_collisions:
             (parent_path, _) = os.path.split(filepath)
             grand_parent_path, parent_name = os.path.split(parent_path)
             grand_parent_name = os.path.split(grand_parent_path)[1]
-            arcname = os.path.join("export_data", grand_parent_name, parent_name, filename)
-            if filename == "transcript.txt":
-                arcname = os.path.join("export_data", parent_name, filename)
-
+            arcname = os.path.join(cls.DISK_EXPORT_DIR, grand_parent_name, parent_name, filename)
+            if filename.endswith("transcript.txt"):
+                arcname = os.path.join(cls.DISK_EXPORT_DIR, parent_name, filename)
         archive.add(filepath, arcname=arcname, recursive=False)
 
     def _run_printer_preflight(self, archive_dir: str) -> None:
