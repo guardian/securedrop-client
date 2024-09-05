@@ -375,10 +375,10 @@ msgstr ""
 msgid "See your administrator for help."
 msgstr ""
 
-msgid "Export failed"
-
 msgid "This file type cannot be printed."
+msgstr ""
 
+msgid "Export failed"
 msgstr ""
 
 msgid "YES, DELETE ENTIRE SOURCE ACCOUNT"
