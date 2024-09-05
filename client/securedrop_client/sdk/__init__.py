@@ -109,7 +109,6 @@ class API:
         self.token_journalist_uuid: str | None = None
         self.first_name: str | None = None
         self.last_name: str | None = None
-        self.req_headers: dict[str, str] = dict()
         self.development_mode: bool = not proxy
         self.default_request_timeout = default_request_timeout or DEFAULT_REQUEST_TIMEOUT
         self.default_download_timeout = default_download_timeout or DEFAULT_DOWNLOAD_TIMEOUT
@@ -214,6 +213,7 @@ class API:
 
                 # Check for an error response
                 if contents[0:1] == b"{":
+                    logger.debug(f"Retry {retry}, received JSON error response")
                     return self._handle_json_response(contents)
 
                 # Get the headers
@@ -278,7 +278,7 @@ class API:
             # item is missing. In that case we return to the caller to
             # handle that with an appropriate message. However, if the error
             # is not a 404, then we raise.
-            raise BaseError("Unknown error")
+            raise BaseError(f"Unknown error, status: {result['status']}")
 
         data = json.loads(result["body"])
         return JSONResponse(data=data, status=result["status"], headers=result["headers"])
@@ -377,17 +377,20 @@ class API:
         self.first_name = response.data["journalist_first_name"]
         self.last_name = response.data["journalist_last_name"]
 
-        self.update_auth_header()
-
         return True
 
-    def update_auth_header(self) -> None:
+    def build_headers(self) -> dict[str, str]:
+        # Build headers dynamically each time to make sure
+        # the dict is safe to mutate.
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
         if self.token is not None:
-            self.req_headers = {
-                "Authorization": "Token " + self.token,
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            }
+            headers["Authorization"] = "Token " + self.token
+
+        return headers
 
     def get_sources(self) -> list[Source]:
         """
@@ -401,7 +404,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -428,7 +431,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -437,17 +440,6 @@ class API:
             raise WrongUUIDError(f"Missing source {source.uuid}")
 
         return Source(**response.data)
-
-    def get_source_from_string(self, uuid: str) -> Source:
-        """
-        This will fetch a source from server and return it.
-
-        :param uuid: Source UUID as string.
-        :returns: Source object fetched from server for the given UUID value.
-        """
-
-        s = Source(uuid=uuid)
-        return self.get_source(s)
 
     def delete_source(self, source: Source) -> bool:
         """
@@ -463,7 +455,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -493,7 +485,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -505,18 +497,6 @@ class API:
             return True
 
         return False
-
-    def delete_source_from_string(self, uuid: str) -> bool:
-        """
-        This method will delete the source and collection. If the UUID
-        is not found in the server, it will raise WrongUUIDError.
-
-        :param uuid: Source UUID as string.
-        :returns: True if the operation is successful.
-        """
-
-        s = Source(uuid=uuid)
-        return self.delete_source(s)
 
     def add_star(self, source: Source) -> bool:
         """
@@ -531,7 +511,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -556,7 +536,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -582,7 +562,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -613,7 +593,7 @@ class API:
             response = self._send_json_request(
                 method,
                 path_query,
-                headers=self.req_headers,
+                headers=self.build_headers(),
                 timeout=self.default_request_timeout,
             )
             assert isinstance(response, JSONResponse)
@@ -625,18 +605,6 @@ class API:
         else:
             # XXX: is this the correct behavior
             return submission
-
-    def get_submission_from_string(self, uuid: str, source_uuid: str) -> Submission:
-        """
-        Returns the updated Submission object from the server.
-
-        :param uuid: UUID of the Submission object.
-        :param source_uuid: UUID of the source.
-        :returns: Updated submission object from the server.
-        """
-        s = Submission(uuid=uuid)
-        s.source_uuid = source_uuid
-        return self.get_submission(s)
 
     def get_all_submissions(self) -> list[Submission]:
         """
@@ -650,7 +618,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -673,14 +641,13 @@ class API:
         """
         # Not using direct URL because this helps to use the same method
         # from local submission (not fetched from server) objects.
-        # See the *from_string for an example.
         path_query = f"api/v1/sources/{submission.source_uuid}/submissions/{submission.uuid}"
         method = "DELETE"
 
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -692,18 +659,6 @@ class API:
             return True
         # We should never reach here
         return False
-
-    def delete_submission_from_string(self, uuid: str, source_uuid: str) -> bool:
-        """
-        Deletes a given Submission based on UUIDs from the server.
-
-        :param uuid: UUID of the Submission object.
-        :param source_uuid: UUID of the source.
-        :returns: Updated submission object from the server.
-        """
-        s = Submission(uuid=uuid)
-        s.source_url = f"/api/v1/sources/{source_uuid}"
-        return self.delete_submission(s)
 
     def download_submission(
         self, submission: Submission, path: str | None = None, timeout: int | None = None
@@ -733,7 +688,7 @@ class API:
             method,
             path_query,
             stream=True,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=timeout or self.default_download_timeout,
         )
 
@@ -761,7 +716,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -789,7 +744,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -809,7 +764,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -843,7 +798,7 @@ class API:
             method,
             path_query,
             body=json.dumps(reply),
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -866,7 +821,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -896,7 +851,7 @@ class API:
             response = self._send_json_request(
                 method,
                 path_query,
-                headers=self.req_headers,
+                headers=self.build_headers(),
                 timeout=self.default_request_timeout,
             )
             assert isinstance(response, JSONResponse)
@@ -920,7 +875,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -957,7 +912,7 @@ class API:
             method,
             path_query,
             stream=True,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
 
@@ -982,7 +937,6 @@ class API:
         """
         # Not using direct URL because this helps to use the same method
         # from local reply (not fetched from server) objects.
-        # See the *from_string for an example.
         path_query = f"api/v1/sources/{reply.source_uuid}/replies/{reply.uuid}"
 
         method = "DELETE"
@@ -990,7 +944,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -1013,7 +967,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             timeout=self.default_request_timeout,
         )
         assert isinstance(response, JSONResponse)
@@ -1038,7 +992,7 @@ class API:
         response = self._send_json_request(
             method,
             path_query,
-            headers=self.req_headers,
+            headers=self.build_headers(),
             body=body,
             timeout=self.default_request_timeout,
         )
