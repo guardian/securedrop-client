@@ -22,13 +22,14 @@ import logging
 from gettext import gettext as _
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QClipboard, QGuiApplication, QIcon, QKeySequence
+from PyQt5.QtGui import QClipboard, QGuiApplication, QIcon
 from PyQt5.QtWidgets import QAction, QApplication, QHBoxLayout, QMainWindow, QVBoxLayout, QWidget
 
 from securedrop_client import __version__, state
 from securedrop_client.db import Source, User
 from securedrop_client.gui.auth import LoginDialog
-from securedrop_client.gui.widgets import LeftPane, MainView, TopPane
+from securedrop_client.gui.shortcuts import Shortcuts
+from securedrop_client.gui.widgets import BottomPane, LeftPane, MainView
 from securedrop_client.logic import Controller
 from securedrop_client.resources import load_all_fonts, load_css, load_icon
 
@@ -51,10 +52,10 @@ class Window(QMainWindow):
         Create the default start state. The window contains a root widget into
         which is placed:
 
-        * A status bar widget at the top, containing curent user / status
-          information.
         * A main-view widget, itself containing a list view for sources and a
           place for details / message contents / forms.
+        * A status bar widget at the bottom, containing network and error status
+          information.
         """
         super().__init__()
         load_all_fonts()
@@ -62,8 +63,8 @@ class Window(QMainWindow):
         self.setWindowTitle(_("SecureDrop Client {}").format(__version__))
         self.setWindowIcon(load_icon(self.icon))
 
-        # Top Pane to display activity and error messages
-        self.top_pane = TopPane()
+        # Bottom Pane to display activity and error messages
+        self.bottom_pane = BottomPane()
 
         # Main Pane to display everything else
         self.main_pane = QWidget()
@@ -74,18 +75,19 @@ class Window(QMainWindow):
         self.main_pane.setLayout(layout)
         self.left_pane = LeftPane()
         self.main_view = MainView(self.main_pane, app_state)
+
         layout.addWidget(self.left_pane)
         layout.addWidget(self.main_view)
 
-        # Set the main window's central widget to show Top Pane and Main Pane
+        # Set the main window's central widget to show Main Pane and Bottom Pane
         self.central_widget = QWidget()
         central_widget_layout = QVBoxLayout()
         central_widget_layout.setContentsMargins(0, 0, 0, 0)
         central_widget_layout.setSpacing(0)
         self.central_widget.setLayout(central_widget_layout)
         self.setCentralWidget(self.central_widget)
-        central_widget_layout.addWidget(self.top_pane)
         central_widget_layout.addWidget(self.main_pane)
+        central_widget_layout.addWidget(self.bottom_pane)
 
         # Dialogs
         self.login_dialog: LoginDialog | None = None
@@ -93,7 +95,7 @@ class Window(QMainWindow):
         # Actions
         quit = QAction(_("Quit"), self)
         quit.setIcon(QIcon.fromTheme("application-exit"))
-        quit.setShortcut(QKeySequence.Quit)
+        quit.setShortcut(Shortcuts.QUIT.value)
         quit.triggered.connect(self.close)
         self.addAction(quit)
 
@@ -103,9 +105,15 @@ class Window(QMainWindow):
         views used in the UI.
         """
         self.controller = controller
-        self.top_pane.setup(self.controller)
+        self.bottom_pane.setup(self.controller)
         self.left_pane.setup(self, self.controller)
         self.main_view.setup(self.controller)
+
+        # Listen for changes to the selected sources in sourcelist
+        self.main_view.source_list.selected_sources.connect(
+            self.controller.on_receive_selected_sources
+        )
+
         self.show_login()
 
     def show_main_window(self, db_user: User | None = None) -> None:
@@ -182,41 +190,43 @@ class Window(QMainWindow):
         Update the UI to show user logged in with username.
         """
         self.left_pane.set_logged_in_as(db_user)
-        self.top_pane.set_logged_in()
+        self.bottom_pane.set_logged_in()
+        self.main_view.set_logged_in()
 
     def logout(self) -> None:
         """
         Update the UI to show the user is logged out.
         """
         self.left_pane.set_logged_out()
-        self.top_pane.set_logged_out()
+        self.bottom_pane.set_logged_out()
+        self.main_view.set_logged_out()
 
     def update_sync_status(self, message: str, duration: int = 0) -> None:
         """
         Display an activity status message to the user. Optionally, supply a duration
         (in milliseconds), the default will continuously show the message.
         """
-        self.top_pane.update_sync_status(message, duration)
+        self.bottom_pane.update_sync_status(message, duration)
 
     def update_activity_status(self, message: str, duration: int = 0) -> None:
         """
         Display an activity status message to the user. Optionally, supply a duration
         (in milliseconds), the default will continuously show the message.
         """
-        self.top_pane.update_activity_status(message, duration)
+        self.bottom_pane.update_activity_status(message, duration)
 
     def update_error_status(self, message: str, duration: int = 10000) -> None:
         """
         Display an error status message to the user. Optionally, supply a duration
         (in milliseconds), the default will continuously show the message.
         """
-        self.top_pane.update_error_status(message, duration)
+        self.bottom_pane.update_error_status(message, duration)
 
     def clear_error_status(self) -> None:
         """
         Clear any message currently in the error status bar.
         """
-        self.top_pane.clear_error_status()
+        self.bottom_pane.clear_error_status()
 
     def clear_clipboard(self) -> None:
         """
