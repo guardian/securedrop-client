@@ -107,38 +107,6 @@ class DeleteSourceAction(QAction):
         else:
             self._confirmation_dialog.exec()
 
-
-class DeleteSourcesAction(QAction):
-    """Use this action to delete multiple source records."""
-
-    def __init__(
-        self,
-        # ignored F821 - SourceListToolbar deliberately not imported to avoid circular dependency
-        parent: "SourceListToolbar",  # type: ignore[name-defined] # noqa: F821
-        controller: Controller,
-        confirmation_dialog: Callable[[list[str]], QDialog],
-    ) -> None:
-        self.controller = controller
-        self._confirmation_dialog = confirmation_dialog
-        text = _("Delete Source Accounts")
-
-        super().__init__(text, parent=parent)
-        self.triggered.connect(self.trigger)
-        self.setEnabled(False)  # disabled until sources are selected
-
-    def trigger(self) -> None:
-        checked_sources = self.controller.get_checked_sources()
-
-        if self.controller.api is None:
-            self.controller.on_action_requiring_login()
-        else:
-            confirmation_dialog = self._confirmation_dialog(checked_sources)
-            confirmation_dialog.accepted.connect(
-                lambda: self.controller.delete_sources(checked_sources)
-            )
-            confirmation_dialog.exec()
-
-
 class DeleteConversationAction(QAction):
     """Use this action to delete a source's submissions and replies."""
 
