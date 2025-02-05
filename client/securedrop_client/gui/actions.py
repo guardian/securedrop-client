@@ -107,6 +107,7 @@ class DeleteSourceAction(QAction):
         else:
             self._confirmation_dialog.exec()
 
+
 class DeleteConversationAction(QAction):
     """Use this action to delete a source's submissions and replies."""
 

@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from gettext import gettext as _
 from gettext import ngettext
+
 from PyQt5.QtCore import QTimer
 
 from securedrop_client.db import Source
