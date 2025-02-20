@@ -98,6 +98,7 @@ logger = logging.getLogger(__name__)
 
 MINIMUM_ANIMATION_DURATION_IN_MILLISECONDS = 300
 NO_DELAY = 1
+LAST_UPDATED_LABEL_TOOLTIP="Time of last activity from source"
 
 
 class BottomPane(QWidget):
@@ -1594,6 +1595,7 @@ class SourceWidget(QWidget):
         self.timestamp.setSizePolicy(retain_space)
         self.timestamp.setFixedWidth(self.TIMESTAMP_WIDTH)
         self.timestamp.setObjectName("SourceWidget_timestamp")
+        self.timestamp.setToolTip(LAST_UPDATED_LABEL_TOOLTIP)
 
         # Create source_widget:
         # -------------------------------------------------------------------
@@ -3812,6 +3814,7 @@ class LastUpdatedLabel(QLabel):
 
         # Set CSS id
         self.setObjectName("LastUpdatedLabel")
+        self.setToolTip(LAST_UPDATED_LABEL_TOOLTIP)
 
 
 class SourceProfileShortWidget(QWidget):
