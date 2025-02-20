@@ -2088,6 +2088,7 @@ class SpeechBubble(QWidget):
         download_error_signal,
         index: int,
         container_width: int,
+        timestamp: str,
         authenticated_user: Optional[User] = None,
         failed_to_decrypt: bool = False,
     ) -> None:
@@ -2131,6 +2132,10 @@ class SpeechBubble(QWidget):
         self.setObjectName("Checker")
         self.setStyleSheet(self.CHECK_MARK_CSS)
         self.check_mark.installEventFilter(self)
+
+        # Timestamp
+        self.timestamp = QLabel()
+        self.timestamp.setText(timestamp)
 
         # Speech bubble
         self.speech_bubble = QWidget()
@@ -2288,6 +2293,7 @@ class MessageWidget(SpeechBubble):
         download_error_signal,
         index: int,
         container_width: int,
+        timestamp: str,
         authenticated_user: Optional[User] = None,
         failed_to_decrypt: bool = False,
     ) -> None:
@@ -2298,6 +2304,7 @@ class MessageWidget(SpeechBubble):
             download_error_signal,
             index,
             container_width,
+            timestamp,
             authenticated_user,
             failed_to_decrypt,
         )
@@ -2306,6 +2313,7 @@ class MessageWidget(SpeechBubble):
         # to appear in the required position.
         self.bubble_area.setLayoutDirection(Qt.LeftToRight)
         self.bubble_area_layout.addWidget(self.check_mark, alignment=Qt.AlignBottom)
+        self.bubble_area_layout.addWidget(self.timestamp, alignment=Qt.AlignBottom)
         self.check_mark.show()
 
 
@@ -2331,6 +2339,7 @@ class ReplyWidget(SpeechBubble):
         message_failed_signal,
         index: int,
         container_width: int,
+        timestamp: str,
         sender: User,
         sender_is_current_user: bool,
         authenticated_user: Optional[User] = None,
@@ -2343,6 +2352,7 @@ class ReplyWidget(SpeechBubble):
             download_error_signal,
             index,
             container_width,
+            timestamp,
             authenticated_user,
             failed_to_decrypt,
         )
@@ -2370,6 +2380,7 @@ class ReplyWidget(SpeechBubble):
         self.error.hide()
 
         self.bubble_area_layout.addWidget(self.check_mark, alignment=Qt.AlignBottom)
+        self.bubble_area_layout.addWidget(self.timestamp, alignment=Qt.AlignBottom)
         self.bubble_area_layout.addWidget(self.error, alignment=Qt.AlignBottom)
         self.sender_icon.show()
 
@@ -3192,6 +3203,7 @@ class ConversationView(QWidget):
             self.controller.message_download_failed,
             index,
             self._scroll.widget().width(),
+            format_datetime_local_timestamp(message.last_updated),
             self.controller.authenticated_user,
             message.download_error is not None,
         )
@@ -3223,6 +3235,8 @@ class ConversationView(QWidget):
         else:
             sender_is_current_user = False
 
+        timestamp = reply.last_updated if hasattr(reply, 'last_updated')  else reply.timestamp
+
         conversation_item = ReplyWidget(
             self.controller,
             reply.uuid,
@@ -3234,6 +3248,7 @@ class ConversationView(QWidget):
             self.controller.reply_failed,
             index,
             self._scroll.widget().width(),
+            format_datetime_local_timestamp(timestamp),
             sender,
             sender_is_current_user,
             self.controller.authenticated_user,
