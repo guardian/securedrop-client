@@ -3,7 +3,7 @@ Make sure the UI widgets are configured correctly and work as expected.
 """
 
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 from gettext import gettext as _
 from unittest.mock import Mock, PropertyMock
 
@@ -22,6 +22,7 @@ from securedrop_client.gui.datetime_helpers import format_datetime_local
 from securedrop_client.gui.source import DeleteSourceDialog
 from securedrop_client.gui.widgets import (
     ActivityStatusBar,
+    BottomPane,
     ConversationView,
     EmptyConversationView,
     ErrorStatusBar,
@@ -30,6 +31,8 @@ from securedrop_client.gui.widgets import (
     LoginButton,
     MainView,
     MessageWidget,
+    MultiSelectView,
+    NothingSelectedView,
     ReplyBoxWidget,
     ReplyTextEdit,
     ReplyTextEditPlaceholder,
@@ -46,7 +49,6 @@ from securedrop_client.gui.widgets import (
     SpeechBubble,
     StarToggleButton,
     SyncIcon,
-    TopPane,
     UserButton,
     UserIconLabel,
     UserMenu,
@@ -55,87 +57,87 @@ from securedrop_client.gui.widgets import (
 from tests import factory
 
 
-def test_TopPane_init(mocker):
+def test_BottomPane_init(mocker):
     """
-    Ensure the TopPane instance is correctly set up.
+    Ensure the BottomPane instance is correctly set up.
     """
-    tp = TopPane()
-    file_path = tp.sync_icon.sync_animation.fileName()
+    bp = BottomPane()
+    file_path = bp.sync_icon.sync_animation.fileName()
     filename = file_path[file_path.rfind("/") + 1 :]
     assert filename == "sync_disabled.gif"
 
 
-def test_TopPane_setup(mocker):
+def test_BottomPane_setup(mocker):
     """
     Calling setup calls setup for SyncIcon.
     """
-    tp = TopPane()
-    tp.sync_icon = mocker.MagicMock()
+    bp = BottomPane()
+    bp.sync_icon = mocker.MagicMock()
     mock_controller = mocker.MagicMock()
 
-    tp.setup(mock_controller)
+    bp.setup(mock_controller)
 
-    tp.sync_icon.setup.assert_called_once_with(mock_controller)
+    bp.sync_icon.setup.assert_called_once_with(mock_controller)
 
 
-def test_TopPane_set_logged_in(mocker):
+def test_BottomPane_set_logged_in(mocker):
     """
-    Calling set_logged_in calls enable on TopPane.
+    Calling set_logged_in calls enable on BottomPane.
     """
-    tp = TopPane()
-    tp.sync_icon = mocker.MagicMock()
+    bp = BottomPane()
+    bp.sync_icon = mocker.MagicMock()
 
-    tp.set_logged_in()
+    bp.set_logged_in()
 
-    tp.sync_icon.enable.assert_called_once_with()
+    bp.sync_icon.enable.assert_called_once_with()
 
 
-def test_TopPane_set_logged_out(mocker):
+def test_BottomPane_set_logged_out(mocker):
     """
     Calling set_logged_out calls disable on SyncIcon.
     """
-    tp = TopPane()
-    tp.sync_icon = mocker.MagicMock()
+    bp = BottomPane()
+    bp.sync_icon = mocker.MagicMock()
 
-    tp.set_logged_out()
+    bp.set_logged_out()
 
-    tp.sync_icon.disable.assert_called_once_with()
+    bp.sync_icon.disable.assert_called_once_with()
 
 
-def test_TopPane_update_activity_status(mocker):
+def test_BottomPane_update_activity_status(mocker):
     """
     Calling update_activity_status calls update_message on ActivityStatusBar.
     """
-    tp = TopPane()
-    tp.activity_status_bar = mocker.MagicMock()
+    bp = BottomPane()
+    bp.activity_status_bar = mocker.MagicMock()
 
-    tp.update_activity_status(message="test message", duration=5)
+    bp.update_activity_status(message="test message", duration=5)
 
-    tp.activity_status_bar.update_message.assert_called_once_with("test message", 5)
+    bp.activity_status_bar.update_message.assert_called_once_with("test message", 5)
 
 
-def test_TopPane_update_error_status(mocker):
+def test_BottomPane_update_error_status(mocker):
     """
     Calling update_error_status calls update_message on ErrorStatusBar.
     """
-    tp = TopPane()
-    tp.error_status_bar = mocker.MagicMock()
+    bp = BottomPane()
+    bp.error_status_bar = mocker.MagicMock()
 
-    tp.update_error_status(message="test message", duration=5)
+    bp.update_error_status(message="test message", duration=5)
 
-    tp.error_status_bar.update_message.assert_called_once_with("test message", 5)
+    bp.error_status_bar.update_message.assert_called_once_with("test message", 5)
 
 
-def test_TopPane_clear_error_status(mocker):
+def test_BottomPane_clear_error_status(mocker):
     """
     Calling clear_error_status calls clear_message.
     """
-    tp = TopPane()
-    tp.error_status_bar = mocker.MagicMock()
+    bp = BottomPane()
+    bp.error_status_bar = mocker.MagicMock()
 
-    tp.clear_error_status()
+    bp.clear_error_status()
 
-    tp.error_status_bar.clear_message.assert_called_once_with()
+    bp.error_status_bar.clear_message.assert_called_once_with()
 
 
 def test_LeftPane_init(mocker):
@@ -533,21 +535,17 @@ def test_MainView_show_sources_with_none_selected(mocker):
 
     # Set up SourceList so that SourceList.get_selected_source() returns a source
     mv.source_list = SourceList()
+    mv.source_list.controller = mocker.MagicMock()
     source_widget = SourceWidget(
         mocker.MagicMock(), factory.Source(uuid="stub_uuid"), mocker.MagicMock(), mocker.MagicMock()
     )
     source_item = SourceListWidgetItem(mv.source_list)
     mv.source_list.setItemWidget(source_item, source_widget)
     mv.source_list.source_items["stub_uuid"] = source_item
-    mocker.patch.object(mv.source_list, "update_sources")
 
-    mv.empty_conversation_view = mocker.MagicMock()
+    mv.show_sources([factory.Source(), factory.Source(), factory.Source()])
 
-    mv.show_sources([1, 2, 3])
-
-    mv.source_list.update_sources.assert_called_once_with([1, 2, 3])
-    mv.empty_conversation_view.show_no_source_selected_message.assert_called_once_with()
-    mv.empty_conversation_view.show.assert_called_once_with()
+    assert mv.view_layout.currentIndex() == mv.NOTHING_SELECTED_INDEX
 
 
 def test_MainView_show_sources_from_cold_start(mocker):
@@ -570,13 +568,16 @@ def test_MainView_show_sources_with_no_sources_at_all(mocker):
     """
     mv = MainView(None)
     mv.source_list = mocker.MagicMock()
-    mv.empty_conversation_view = mocker.MagicMock()
+    mv.source_list.count = mocker.MagicMock(return_value=0)
+    mv.source_list.selectedItems = mocker.MagicMock(return_value=[])
+
+    mv._on_update_conversation_context = mocker.MagicMock(wraps=mv._on_update_conversation_context)
 
     mv.show_sources([])
 
     mv.source_list.update_sources.assert_called_once_with([])
-    mv.empty_conversation_view.show_no_sources_message.assert_called_once_with()
-    mv.empty_conversation_view.show.assert_called_once_with()
+    mv._on_update_conversation_context.assert_called()
+    assert mv.view_layout.currentIndex() == mv.NO_SOURCES_INDEX
 
 
 def test_MainView_show_sources_when_sources_are_deleted(mocker):
@@ -584,18 +585,20 @@ def test_MainView_show_sources_when_sources_are_deleted(mocker):
     Ensure that show_sources also deletes the SourceConversationWrapper for a deleted source.
     """
     mv = MainView(None)
+    sources = [factory.Source(), factory.Source(), factory.Source(), factory.Source()]
     mv.source_list = mocker.MagicMock()
-    mv.empty_conversation_view = mocker.MagicMock()
+    mv.source_list.count = mocker.MagicMock(return_value=len(sources))
+    mv.source_list.getSelectedItems = mocker.MagicMock(return_value=[])
     mv.source_list.update_sources = mocker.MagicMock(return_value=[])
     mv.delete_conversation = mocker.MagicMock()
 
-    mv.show_sources([1, 2, 3, 4])
+    mv.show_sources(sources)
 
-    mv.source_list.update_sources = mocker.MagicMock(return_value=[4])
+    mv.source_list.update_sources = mocker.MagicMock(return_value=[sources[-1]])
 
-    mv.show_sources([1, 2, 3])
+    mv.show_sources(sources[:-1])
 
-    mv.delete_conversation.assert_called_once_with(4)
+    mv.delete_conversation.assert_called_once_with(sources[-1])
 
 
 def test_MainView_delete_conversation_when_conv_wrapper_exists(mocker):
@@ -603,7 +606,9 @@ def test_MainView_delete_conversation_when_conv_wrapper_exists(mocker):
     Ensure SourceConversationWrapper is deleted if it exists.
     """
     source = factory.Source(uuid="123")
-    conversation_wrapper = SourceConversationWrapper(source, mocker.MagicMock())
+    controller = mocker.MagicMock()
+    controller.get_source_count.return_value = 2
+    conversation_wrapper = SourceConversationWrapper(source, controller)
     conversation_wrapper.deleteLater = mocker.MagicMock()
     mv = MainView(None)
     mv.source_conversations = {}
@@ -635,17 +640,67 @@ def test_MainView_on_source_changed(mocker):
     """
     mv = MainView(None)
     mv.set_conversation = mocker.MagicMock()
+    source = factory.Source()
     mv.source_list = mocker.MagicMock()
-    mv.source_list.get_selected_source = mocker.MagicMock(return_value=factory.Source())
+    mv.source_list.get_selected_source = mocker.MagicMock(return_value=source)
+    mv.source_list.selectedItems = mocker.MagicMock(return_value=[source])
+    mv.source_list.count = mocker.MagicMock(return_value=3)
     mv.controller = mocker.MagicMock(is_authenticated=True)
+    mv.controller.get_source_count.return_value = 3
     mocker.patch("securedrop_client.gui.widgets.source_exists", return_value=True)
-    scw = mocker.MagicMock()
-    mocker.patch("securedrop_client.gui.widgets.SourceConversationWrapper", return_value=scw)
-
     mv.on_source_changed()
 
     mv.source_list.get_selected_source.assert_called_once_with()
-    mv.set_conversation.assert_called_once_with(scw)
+    mv.set_conversation.assert_called_once()
+    assert mv.set_conversation.call_args[0][0].source == source
+
+
+def test_MainView_on_source_changed_shows_correct_context(mocker, homedir, session, session_maker):
+    """
+    Ensure correct context presented based on number of sources selected.
+    """
+    # Build sourcelist
+    sources = []
+    for i in range(10):
+        s = factory.Source()
+        sources.append(s)
+        session.add(s)
+
+    session.commit()
+
+    mv = MainView(None)
+
+    mock_gui = mocker.MagicMock()
+    controller = logic.Controller("http://localhost", mock_gui, session_maker, homedir, None)
+    controller.api = mocker.MagicMock()
+    controller.session.refresh = mocker.MagicMock()
+
+    mv.setup(controller)
+    mv.show()
+
+    assert mv.view_layout.currentIndex() == mv.NO_SOURCES_INDEX
+
+    mv.source_list.update_sources(sources)
+    mv.show_sources(sources)
+
+    assert mv.view_layout.currentIndex() == mv.NOTHING_SELECTED_INDEX
+
+    # Select a source, ensure the correct view context is shown
+    mv.source_list.setCurrentRow(0)
+    assert mv.view_layout.currentIndex() == mv.CONVERSATION_INDEX
+
+    mv.source_list.setCurrentRow(1)
+
+    assert mv.view_layout.currentIndex() == mv.CONVERSATION_INDEX
+    assert (
+        mv.controller.session.refresh.call_args[0][0]
+        == mv.source_list.itemWidget(mv.source_list.item(1)).source
+    )
+
+    # Now ensure the "multiple sources selected" view is shown
+    mv.source_list.selectAll()
+
+    assert mv.view_layout.currentIndex() == mv.MULTI_SELECTED_INDEX
 
 
 def test_MainView_on_source_changed_does_not_raise_InvalidRequestError(mocker):
@@ -655,21 +710,24 @@ def test_MainView_on_source_changed_does_not_raise_InvalidRequestError(mocker):
     """
     mv = MainView(None)
     mv.set_conversation = mocker.MagicMock()
-    mv.source_list = mocker.MagicMock()
-    mv.source_list.get_selected_source = mocker.MagicMock(return_value=factory.Source())
+    source = factory.Source()
+    mv.source_list.count = mocker.MagicMock(return_value=1)
+    mv.source_list.get_selected_source = mocker.MagicMock(return_value=source)
+    mv.source_list.selectedItems = mocker.MagicMock(return_value=[source])
     mv.controller = mocker.MagicMock(is_authenticated=True)
     ex = sqlalchemy.exc.InvalidRequestError()
-    mv.controller.session.refresh.side_effect = ex
+    mv.controller.session = mocker.MagicMock()
+    mv.controller.session.refresh = mocker.MagicMock(side_effect=ex)
 
     mocker.patch("securedrop_client.gui.widgets.source_exists", return_value=True)
-    scw = mocker.MagicMock()
-    mocker.patch("securedrop_client.gui.widgets.SourceConversationWrapper", return_value=scw)
     mock_logger = mocker.MagicMock()
+
     mocker.patch("securedrop_client.gui.widgets.logger", mock_logger)
 
     mv.on_source_changed()
+    mv.controller.session.refresh.assert_called()
 
-    assert mock_logger.debug.call_count == 1
+    assert mock_logger.debug.call_count == 1, mock_logger.debug.call_args
 
 
 def test_MainView_on_source_changed_when_source_no_longer_exists(mocker):
@@ -679,11 +737,12 @@ def test_MainView_on_source_changed_when_source_no_longer_exists(mocker):
     mv = MainView(None)
     mv.set_conversation = mocker.MagicMock()
     mv.source_list = mocker.MagicMock()
+    mv.source_list.selectedItems = mocker.MagicMock()
     mv.source_list.get_selected_source = mocker.MagicMock(return_value=None)
 
     mv.on_source_changed()
 
-    mv.source_list.get_selected_source.assert_called_once_with()
+    assert mv.view_layout.currentIndex() == mv.NOTHING_SELECTED_INDEX
     mv.set_conversation.assert_not_called()
 
 
@@ -692,9 +751,14 @@ def test_MainView_on_source_changed_updates_conversation_view(mocker, session):
     Test that the source collection is displayed in the conversation view.
     """
     mv = MainView(None)
-    # mv.source_list = mocker.MagicMock()
-    mv.controller = mocker.MagicMock(is_authenticated=True)
     source = factory.Source()
+
+    # mv.source_list = mocker.MagicMock()
+    mv.source_list.count = mocker.MagicMock(return_value=1)
+    mv.source_list.selectedItems = mocker.MagicMock(return_value=[source])
+    mv.source_list.get_selected_source = mocker.MagicMock(return_value=source)
+    mv.controller = mocker.MagicMock(is_authenticated=True)
+    mv.controller.get_source_count.return_value = 1
     session.add(source)
     file = factory.File(source=source, filename="0-mock-doc.gpg")
     message = factory.Message(source=source, filename="0-mock-msg.gpg")
@@ -704,9 +768,6 @@ def test_MainView_on_source_changed_updates_conversation_view(mocker, session):
     session.add(reply)
     session.commit()
     source_selected = mocker.patch("securedrop_client.gui.widgets.SourceList.source_selected")
-    mocker.patch(
-        "securedrop_client.gui.widgets.SourceList.get_selected_source", return_value=source
-    )
     add_message_fn = mocker.patch(
         "securedrop_client.gui.widgets.ConversationView.add_message", new=mocker.Mock()
     )
@@ -732,56 +793,56 @@ def test_MainView_on_source_changed_SourceConversationWrapper_is_preserved(mocke
     SourceConversationWrapper when we click away from a given source. We should create it the
     first time, and then it should persist.
     """
-    mv = MainView(None)
-    mv.set_conversation = mocker.MagicMock()
-    source_selected = mocker.patch("securedrop_client.gui.widgets.SourceList.source_selected")
-    mv.controller = mocker.MagicMock(is_authenticated=True)
     source = factory.Source()
     source2 = factory.Source()
     session.add(source)
     session.add(source2)
     session.commit()
 
-    source_conversation_init = mocker.patch(
-        "securedrop_client.gui.widgets.SourceConversationWrapper.__init__", return_value=None
-    )
+    mv = MainView(None)
+    mv.source_list.count = mocker.MagicMock(return_value=2)
+    mv.source_list.source_selected = mocker.MagicMock()
 
-    # We expect on the first call, SourceConversationWrapper.__init__ should be called.
-    mocker.patch(
-        "securedrop_client.gui.widgets.SourceList.get_selected_source", return_value=source
+    # Side effect == first one return value, then the second return value.
+    # Simulate repeated calls
+    mv.source_list.get_selected_source = mocker.MagicMock(side_effect=[source, source2, source])
+
+    # Called twice per redraw event
+    mv.source_list.selectedItems = mocker.MagicMock(
+        side_effect=[[source], [source], [source2], [source2], [source], [source]]
     )
+    mv.set_conversation = mocker.MagicMock(wraps=mv.set_conversation)
+
+    mv.controller = mocker.MagicMock(is_authenticated=True)
+
+    mv.controller.get_source_count.return_value = 2
+
     mv.on_source_changed()
     assert mv.set_conversation.call_count == 1
-    assert source_conversation_init.call_count == 1
-    source_selected.emit.assert_called_once_with(source.uuid)
+    assert source.uuid in mv.source_conversations
+    # We haven't created this widget yet since the conversation hasn't been clicked yet
+    assert source2.uuid not in mv.source_conversations
+    mv.source_list.source_selected.emit.assert_called_once_with(source.uuid)
 
     # Reset mocked objects for the next call of on_source_changed.
-    source_conversation_init.reset_mock()
     mv.set_conversation.reset_mock()
-    source_selected.reset_mock()
+    mv.source_list.source_selected.reset_mock()
 
-    # Now click on another source (source2). Since this is the first time we have clicked
-    # on source2, we expect on the first call, SourceConversationWrapper.__init__ should be
-    # called.
-    mocker.patch(
-        "securedrop_client.gui.widgets.SourceList.get_selected_source", return_value=source2
-    )
+    # Now click on another source (source2) ensure correct widget is constructed.
     mv.on_source_changed()
     assert mv.set_conversation.call_count == 1
-    assert source_conversation_init.call_count == 1
-    source_selected.emit.assert_called_once_with(source2.uuid)
+    assert source.uuid in mv.source_conversations
+    assert source2.uuid in mv.source_conversations
+    mv.source_list.source_selected.emit.assert_called_once_with(source2.uuid)
 
     # Reset mocked objects for the next call of on_source_changed.
-    source_conversation_init.reset_mock()
     mv.set_conversation.reset_mock()
-    source_selected.reset_mock()
+    mv.source_list.source_selected.reset_mock()
 
     # But if we click back (call on_source_changed again) to the source,
     # its SourceConversationWrapper should _not_ be recreated.
-    mocker.patch(
-        "securedrop_client.gui.widgets.SourceList.get_selected_source", return_value=source
-    )
     conversation_wrapper = mv.source_conversations[source.uuid]
+    assert conversation_wrapper is not None
     conversation_wrapper.conversation_view = mocker.MagicMock()
     conversation_wrapper.conversation_view.update_conversation = mocker.MagicMock()
 
@@ -791,8 +852,7 @@ def test_MainView_on_source_changed_SourceConversationWrapper_is_preserved(mocke
 
     # Conversation should be redrawn even for existing source (bug #467).
     assert conversation_wrapper.conversation_view.update_conversation.call_count == 1
-    assert source_conversation_init.call_count == 0
-    source_selected.emit.assert_called_once_with(source.uuid)
+    mv.source_list.source_selected.emit.assert_called_once_with(source.uuid)
 
 
 def test_MainView_refresh_source_conversations(homedir, mocker, qtbot, session_maker, session):
@@ -802,7 +862,8 @@ def test_MainView_refresh_source_conversations(homedir, mocker, qtbot, session_m
     source1 = factory.Source(uuid="rsc-123")
     session.add(source1)
 
-    source2 = factory.Source(uuid="rsc-456")
+    # Less recent update time (default is datetime.now())
+    source2 = factory.Source(uuid="rsc-456", last_updated=(datetime.now() - timedelta(days=1)))
     session.add(source2)
 
     session.commit()
@@ -819,29 +880,32 @@ def test_MainView_refresh_source_conversations(homedir, mocker, qtbot, session_m
     mv.source_list.update_sources(sources)
     mv.show()
 
-    # get the conversations created
-    mocker.patch(
-        "securedrop_client.gui.widgets.SourceList.get_selected_source", return_value=source1
+    # Inspect
+    mv.on_source_changed = mocker.MagicMock(wraps=mv.on_source_changed)
+    mv.source_list.itemSelectionChanged = mocker.MagicMock(
+        wraps=mv.source_list.itemSelectionChanged
     )
-    mv.on_source_changed()
 
-    mocker.patch(
-        "securedrop_client.gui.widgets.SourceList.get_selected_source", return_value=source2
-    )
-    mv.on_source_changed()
+    # Select one source, then another
+    mv.source_list.setCurrentRow(0)
 
+    assert mv.source_list.get_selected_source() == source1
+    # assert mv.on_source_changed.call_count == 1
+    mv.source_list.setCurrentRow(1)
+    assert mv.source_list.get_selected_source() == source2
+
+    # assert mv.on_source_changed.call_count == 2
     assert len(mv.source_conversations) == 2
 
+    # Nothing selected
+    mv.source_list.setCurrentRow(-1)
+
     # refresh with no source selected
-    mocker.patch("securedrop_client.gui.widgets.SourceList.get_selected_source", return_value=None)
     mv.refresh_source_conversations()
+    assert mv.view_layout.currentIndex() == mv.NOTHING_SELECTED_INDEX
 
-    # refresh with source1 selected while its conversation is being deleted
-    mocker.patch(
-        "securedrop_client.gui.widgets.SourceList.get_selected_source", return_value=source1
-    )
-    mv.on_source_changed()
-
+    # # refresh with source1 selected while its conversation is being deleted
+    mv.source_list.setCurrentRow(0)
     assert len(mv.source_list.source_items) == 2
 
     scw1 = mv.source_conversations[source1.uuid]
@@ -931,31 +995,60 @@ def test_MainView_set_conversation(mocker):
     (i.e. that area of the screen on the right hand side).
     """
     mv = MainView(None)
-    mv.view_layout = mocker.MagicMock()
 
-    mock_widget = mocker.MagicMock()
-    mv.set_conversation(mock_widget)
+    mv_controller = mocker.MagicMock()
+    mv_controller.get_source_count.return_value = 2
+    scw = SourceConversationWrapper(factory.Source(), mv_controller)
+    mv.set_conversation(scw)
 
-    mv.view_layout.takeAt.assert_called_once_with(0)
-    mv.view_layout.addWidget.assert_called_once_with(mock_widget)
-
-
-def test_EmptyConversationView_show_no_sources_message(mocker):
-    ecv = EmptyConversationView()
-
-    ecv.show_no_sources_message()
-
-    assert not ecv.no_sources.isHidden()
-    assert ecv.no_source_selected.isHidden()
+    assert mv.view_layout.widget(mv.CONVERSATION_INDEX) == scw
 
 
-def test_EmptyConversationView_show_no_source_selected_message(mocker):
-    ecv = EmptyConversationView()
+def test_EmptyConversationView(mocker):
+    mv = MainView(None)
+    mv.source_list = mocker.MagicMock()
+    mv.source_list.count = mocker.MagicMock(return_value=0)
+    mv.source_list.selectedItems = mocker.MagicMock(return_value=[])
+    mv.show()
+    assert mv.view_layout.count() == 4  # Sanity - are all the pages there?
+    mv.show_sources([])
+    assert mv.view_layout.currentIndex() == mv.NO_SOURCES_INDEX
+    assert isinstance(mv.view_layout.widget(mv.view_layout.currentIndex()), EmptyConversationView)
 
-    ecv.show_no_source_selected_message()
 
-    assert ecv.no_sources.isHidden()
-    assert not ecv.no_source_selected.isHidden()
+def test_NothingSelectedView(mocker):
+    mv = MainView(None)
+    mv.show()
+    mv.source_list = mocker.MagicMock()
+    mv.source_list.count = mocker.MagicMock(return_value=4)
+    mv.source_list.selectedItems = mocker.MagicMock(return_value=[])
+
+    # Sanity check - make sure that all base QStackedWidget pages
+    # (Empty, NothingSelected, MultiSelected, Conversation) are rendered
+    assert mv.view_layout.count() == 4
+
+    mv.show_sources([factory.Source(), factory.Source(), factory.Source()])
+    assert isinstance(mv.view_layout.widget(mv.view_layout.currentIndex()), NothingSelectedView)
+    assert mv.view_layout.currentIndex() == mv.NOTHING_SELECTED_INDEX
+
+
+def test_MultiSelectedView(mocker):
+    mv = MainView(None)
+    sources = [factory.Source(), factory.Source(), factory.Source()]
+    mv.source_list = mocker.MagicMock()
+    mv.source_list.count = mocker.MagicMock(return_value=len(sources))
+    mv.source_list.selectedItems = mocker.MagicMock(return_value=sources[:-1])
+    mv._on_update_conversation_context = mocker.MagicMock(wraps=mv._on_update_conversation_context)
+    mv.show_sources(sources)
+
+    mv.show()
+
+    # Sanity check - make sure that all base QStackedWidget pages
+    # (Empty, NothingSelected, MultiSelected, Conversation) are rendered
+    assert mv.view_layout.count() == 4
+    mv._on_update_conversation_context.assert_called()
+    assert isinstance(mv.view_layout.widget(mv.view_layout.currentIndex()), MultiSelectView)
+    assert mv.view_layout.currentIndex() == mv.MULTI_SELECTED_INDEX
 
 
 def test_SourceList_get_selected_source(mocker):
@@ -3059,7 +3152,7 @@ def test_FileWidget_init_file_not_downloaded(mocker, source, session):
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        "mock", controller, mocker.MagicMock(), mocker.MagicMock(), mocker.MagicMock(), 0, 123
+        file, controller, mocker.MagicMock(), mocker.MagicMock(), mocker.MagicMock(), 0, 123
     )
 
     assert fw.controller == controller
@@ -3084,7 +3177,7 @@ def test_FileWidget_init_file_downloaded(mocker, source, session):
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        "mock", controller, mocker.MagicMock(), mocker.MagicMock(), mocker.MagicMock(), 0, 123
+        file, controller, mocker.MagicMock(), mocker.MagicMock(), mocker.MagicMock(), 0, 123
     )
 
     assert fw.controller == controller
@@ -3103,12 +3196,12 @@ def test_FileWidget_adjust_width(mocker):
     is smaller than the minimum allowed container width. Otherwise check that the width is set
     to the width of the container multiplied by the stretch factor ratio.
     """
-    file = factory.File(source=factory.Source(), is_downloaded=True)
+    file = factory.File(source=factory.Source(), is_downloaded=True, uuid="abc123-ima-uuid")
     get_file = mocker.MagicMock(return_value=file)
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        "abc123-ima-uuid",
+        file,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3137,7 +3230,7 @@ def test_FileWidget__set_file_state_under_mouse(mocker, source, session):
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        file_.uuid,
+        file_,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3161,15 +3254,14 @@ def test_FileWidget_event_handler_left_click(mocker, session, source):
     session.add(file_)
     session.commit()
 
-    get_file = mocker.MagicMock(return_value=file_)
-    controller = mocker.MagicMock(get_file=get_file)
+    controller = mocker.MagicMock()
 
     test_event = QMouseEvent(
         QEvent.MouseButtonPress, QPointF(), Qt.LeftButton, Qt.NoButton, Qt.NoModifier
     )
 
     fw = FileWidget(
-        file_.uuid,
+        file_,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3192,11 +3284,10 @@ def test_FileWidget_event_handler_hover(mocker, session, source):
     session.add(file_)
     session.commit()
 
-    get_file = mocker.MagicMock(return_value=file_)
-    controller = mocker.MagicMock(get_file=get_file)
+    controller = mocker.MagicMock()
 
     fw = FileWidget(
-        file_.uuid,
+        file_,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3231,7 +3322,7 @@ def test_FileWidget_on_left_click_download(mocker, session, source):
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        file_.uuid,
+        file_,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3240,8 +3331,6 @@ def test_FileWidget_on_left_click_download(mocker, session, source):
         123,
     )
     fw.download_button = mocker.MagicMock()
-    get_file.assert_called_once_with(file_.uuid)
-    get_file.reset_mock()
 
     fw._on_left_click()
     get_file.assert_called_once_with(file_.uuid)
@@ -3261,7 +3350,7 @@ def test_FileWidget_on_left_click_downloading_in_progress(mocker, session, sourc
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        file_.uuid,
+        file_,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3271,8 +3360,6 @@ def test_FileWidget_on_left_click_downloading_in_progress(mocker, session, sourc
     )
     fw.downloading = True
     fw.download_button = mocker.MagicMock()
-    get_file.assert_called_once_with(file_.uuid)
-    get_file.reset_mock()
 
     fw._on_left_click()
     get_file.call_count == 0
@@ -3291,7 +3378,7 @@ def test_FileWidget_start_button_animation(mocker, session, source):
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        file_.uuid,
+        file_,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3317,7 +3404,7 @@ def test_FileWidget_on_left_click_open(mocker, session, source):
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        file_.uuid,
+        file_,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3338,11 +3425,10 @@ def test_FileWidget_set_button_animation_frame(mocker, session, source):
     session.add(file_)
     session.commit()
 
-    get_file = mocker.MagicMock(return_value=file_)
-    controller = mocker.MagicMock(get_file=get_file)
+    controller = mocker.MagicMock()
 
     fw = FileWidget(
-        file_.uuid,
+        file_,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3363,11 +3449,10 @@ def test_FileWidget_update(mocker, session, source):
     session.add(file)
     session.commit()
 
-    get_file = mocker.MagicMock(return_value=file)
-    controller = mocker.MagicMock(get_file=get_file)
+    controller = mocker.MagicMock()
 
     fw = FileWidget(
-        file.uuid,
+        file,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3395,7 +3480,7 @@ def test_FileWidget_on_file_download_updates_items_when_uuid_matches(mocker, sou
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        file.uuid,
+        file,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3429,7 +3514,7 @@ def test_FileWidget_on_file_download_started_updates_items_when_uuid_matches(
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        file.uuid,
+        file,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3461,7 +3546,7 @@ def test_FileWidget_filename_truncation(mocker, source, session):
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        file.uuid,
+        file,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3491,7 +3576,7 @@ def test_FileWidget_on_file_download_updates_items_when_uuid_does_not_match(
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        file.uuid,
+        file,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3527,7 +3612,7 @@ def test_FileWidget_on_file_missing_show_download_button_when_uuid_matches(
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        file.uuid,
+        file,
         controller,
         controller.file_download_started,
         controller.file_ready,
@@ -3564,7 +3649,7 @@ def test_FileWidget_on_file_missing_does_not_show_download_button_when_uuid_does
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        file.uuid,
+        file,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3579,6 +3664,34 @@ def test_FileWidget_on_file_missing_does_not_show_download_button_when_uuid_does
     fw.download_button.show.assert_not_called()
 
 
+def test_FileWidget_deleted_db_record(mocker, session, source):
+    """
+    If the db record for a File use to construct a FileWidget is not in the database, the FileWidget
+    representing that record should be deleted.
+    """
+    file = factory.File(source=source["source"], is_downloaded=True)
+
+    controller = mocker.MagicMock()
+    controller.get_file.return_value = None  # Record deleted from database
+
+    fw = FileWidget(
+        file,
+        controller,
+        mocker.MagicMock(),
+        mocker.MagicMock(),
+        mocker.MagicMock(),
+        0,
+        123,
+    )
+
+    delete_self = mocker.patch.object(fw, "deleteLater")
+
+    # A method that calls controller.get_file, meaning the record returned could be None
+    fw.stop_button_animation()
+
+    delete_self.assert_called()
+
+
 def test_FileWidget__on_export_clicked(mocker, session, source):
     """
     Ensure preflight checks start when the EXPORT button is clicked and that password is requested
@@ -3587,12 +3700,11 @@ def test_FileWidget__on_export_clicked(mocker, session, source):
     session.add(file)
     session.commit()
 
-    get_file = mocker.MagicMock(return_value=file)
-    controller = mocker.MagicMock(get_file=get_file)
+    controller = mocker.MagicMock()
     file_location = file.location(controller.data_dir)
 
     fw = FileWidget(
-        file.uuid, controller, mocker.MagicMock(), mocker.MagicMock(), mocker.MagicMock(), 0, 123
+        file, controller, mocker.MagicMock(), mocker.MagicMock(), mocker.MagicMock(), 0, 123
     )
     fw.update = mocker.MagicMock()
     mocker.patch("PyQt5.QtWidgets.QDialog.exec")
@@ -3622,7 +3734,7 @@ def test_FileWidget__on_export_clicked_missing_file(mocker, session, source):
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        file.uuid,
+        file,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3655,7 +3767,7 @@ def test_FileWidget__on_print_clicked(mocker, session, source):
     file_location = file.location(controller.data_dir)
 
     fw = FileWidget(
-        file.uuid,
+        file,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3689,7 +3801,7 @@ def test_FileWidget__on_print_clicked_missing_file(mocker, session, source):
     controller = mocker.MagicMock(get_file=get_file)
 
     fw = FileWidget(
-        file.uuid,
+        file,
         controller,
         mocker.MagicMock(),
         mocker.MagicMock(),
@@ -3730,7 +3842,7 @@ def test_FileWidget_update_file_size_with_deleted_file(
         controller.session.commit()
 
         fw = FileWidget(
-            file.uuid,
+            file,
             controller,
             mocker.MagicMock(),
             mocker.MagicMock(),
@@ -3752,6 +3864,7 @@ def test_SourceConversationWrapper_on_conversation_updated(mocker, qtbot):
 
     get_file = mocker.MagicMock(return_value=file)
     controller = mocker.MagicMock(get_file=get_file)
+    controller.get_source_count.return_value = 1
 
     scw = SourceConversationWrapper(source, controller, None)
     scw.conversation_title_bar.updated.setText("CANARY")
@@ -3772,14 +3885,13 @@ def test_SourceConversationWrapper_on_source_deleted(mocker):
     mv.source_list = mocker.MagicMock()
     mv.source_list.get_selected_source = mocker.MagicMock(return_value=source)
     mv.controller = mocker.MagicMock(is_authenticated=True)
-    mv.show()
+    mv.controller.get_source_count.return_value = 1
+
+    # Detached sourceconversationwrapper, just for unit testing
     scw = SourceConversationWrapper(source, mv.controller, None)
-    mocker.patch("securedrop_client.gui.widgets.SourceConversationWrapper", return_value=scw)
     mv.on_source_changed()
     scw.on_source_deleted("123")
 
-    assert mv.isVisible()
-    assert scw.isVisible()
     assert not scw.conversation_title_bar.isHidden()
     assert not scw.reply_box.isHidden()
     assert not scw.reply_box.text_edit.isEnabled()
@@ -3790,7 +3902,9 @@ def test_SourceConversationWrapper_on_source_deleted(mocker):
 
 
 def test_SourceConversationWrapper_on_source_deleted_wrong_uuid(mocker):
-    scw = SourceConversationWrapper(factory.Source(uuid="123"), mocker.MagicMock())
+    controller = mocker.MagicMock()
+    controller.get_source_count.return_value = 1
+    scw = SourceConversationWrapper(factory.Source(uuid="123"), controller)
     scw.on_source_deleted("321")
     assert not scw.conversation_title_bar.isHidden()
     assert not scw.conversation_view.isHidden()
@@ -3799,7 +3913,9 @@ def test_SourceConversationWrapper_on_source_deleted_wrong_uuid(mocker):
 
 
 def test_SourceConversationWrapper_on_source_deletion_failed(mocker):
-    scw = SourceConversationWrapper(factory.Source(uuid="123"), mocker.MagicMock())
+    controller = mocker.MagicMock()
+    controller.get_source_count.return_value = 1
+    scw = SourceConversationWrapper(factory.Source(uuid="123"), controller)
     scw.on_source_deleted("123")
 
     scw.on_source_deletion_failed("123")
@@ -3811,7 +3927,9 @@ def test_SourceConversationWrapper_on_source_deletion_failed(mocker):
 
 
 def test_SourceConversationWrapper_on_source_deletion_failed_wrong_uuid(mocker):
-    scw = SourceConversationWrapper(factory.Source(uuid="123"), mocker.MagicMock())
+    controller = mocker.MagicMock()
+    controller.get_source_count.return_value = 1
+    scw = SourceConversationWrapper(factory.Source(uuid="123"), controller)
     scw.on_source_deleted("123")
 
     scw.on_source_deletion_failed("321")
@@ -3828,15 +3946,14 @@ def test_SourceConversationWrapper_on_conversation_deleted(mocker):
     mv.source_list = mocker.MagicMock()
     mv.source_list.get_selected_source = mocker.MagicMock(return_value=source)
     mv.controller = mocker.MagicMock(is_authenticated=True)
+    mv.controller.get_source_count.return_value = 1
+    mocker.patch("securedrop_client.gui.widgets.source_exists", return_value=True)
     mv.show()
     scw = SourceConversationWrapper(source, mv.controller, None)
-    mocker.patch("securedrop_client.gui.widgets.SourceConversationWrapper", return_value=scw)
     mv.on_source_changed()
 
     scw.on_conversation_deleted("123")
 
-    assert mv.isVisible()
-    assert scw.isVisible()
     assert not scw.conversation_title_bar.isHidden()
     assert not scw.reply_box.isHidden()
     assert not scw.reply_box.text_edit.isEnabled()
@@ -3848,7 +3965,9 @@ def test_SourceConversationWrapper_on_conversation_deleted(mocker):
 
 
 def test_SourceConversationWrapper_on_conversation_deleted_wrong_uuid(mocker):
-    scw = SourceConversationWrapper(factory.Source(uuid="123"), mocker.MagicMock())
+    controller = mocker.MagicMock()
+    controller.get_source_count.return_value = 1
+    scw = SourceConversationWrapper(factory.Source(uuid="123"), controller)
     scw.on_conversation_deleted("321")
     assert not scw.conversation_title_bar.isHidden()
     assert not scw.conversation_view.isHidden()
@@ -3858,7 +3977,9 @@ def test_SourceConversationWrapper_on_conversation_deleted_wrong_uuid(mocker):
 
 
 def test_SourceConversationWrapper__on_conversation_deletion_successful(mocker):
-    scw = SourceConversationWrapper(factory.Source(uuid="123"), mocker.MagicMock())
+    controller = mocker.MagicMock()
+    controller.get_source_count.return_value = 1
+    scw = SourceConversationWrapper(factory.Source(uuid="123"), controller)
     scw.on_conversation_deleted("123")
 
     scw._on_conversation_deletion_successful("123", datetime.now())
@@ -3871,7 +3992,9 @@ def test_SourceConversationWrapper__on_conversation_deletion_successful(mocker):
 
 
 def test_SourceConversationWrapper_on_conversation_deletion_failed(mocker):
-    scw = SourceConversationWrapper(factory.Source(uuid="123"), mocker.MagicMock())
+    controller = mocker.MagicMock()
+    controller.get_source_count.return_value = 1
+    scw = SourceConversationWrapper(factory.Source(uuid="123"), controller)
     scw.on_conversation_deleted("123")
 
     scw.on_conversation_deletion_failed("123")
@@ -3884,7 +4007,9 @@ def test_SourceConversationWrapper_on_conversation_deletion_failed(mocker):
 
 
 def test_SourceConversationWrapper_on_conversation_deletion_failed_wrong_uuid(mocker):
-    scw = SourceConversationWrapper(factory.Source(uuid="123"), mocker.MagicMock())
+    controller = mocker.MagicMock()
+    controller.get_source_count.return_value = 1
+    scw = SourceConversationWrapper(factory.Source(uuid="123"), controller)
     scw.on_conversation_deleted("123")
 
     scw.on_conversation_deletion_failed("321")
@@ -4353,7 +4478,8 @@ def test_ConversationView_add_not_downloaded_file(mocker, homedir, source, sessi
 def test_DeleteSource_from_source_menu_when_user_is_loggedout(mocker):
     mock_controller = mocker.MagicMock()
     mock_controller.api = None
-    mock_source = mocker.MagicMock()
+    mock_controller.get_source_count.return_value = 1
+    mock_source = factory.Source()
     mock_delete_source_dialog_instance = mocker.MagicMock(DeleteSourceDialog)
     mock_delete_source_dialog = mocker.MagicMock()
     mock_delete_source_dialog.return_value = mock_delete_source_dialog_instance
@@ -5226,6 +5352,7 @@ def test_SourceProfileShortWidget_update_timestamp(mocker):
     instance with the last_updated value from the source..
     """
     mock_controller = mocker.MagicMock()
+    mock_controller.get_source_count.return_value = 1
     mock_source = mocker.MagicMock()
     mock_source.last_updated = datetime.now()
     mock_source.journalist_designation = "wimple horse knackered unittest"

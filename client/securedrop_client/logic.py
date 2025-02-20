@@ -29,7 +29,6 @@ from gettext import ngettext
 import arrow
 import sqlalchemy.orm.exc
 from PyQt5.QtCore import QObject, QProcess, QThread, QTimer, pyqtSignal, pyqtSlot
-from PyQt5.QtWidgets import QCheckBox
 from sqlalchemy.orm.session import sessionmaker
 
 from securedrop_client import db, sdk, state, storage
@@ -418,21 +417,8 @@ class Controller(QObject):
         ):
             os.chmod(self.last_sync_filepath, 0o600)
 
-    def get_checked_sources(self) -> list[str]:
-        """
-        Returns the list of sources that are checked in the UI.
-        """
-        source_items = self.gui.main_view.source_list.source_items
-        checked_source_uuids = []
-        for source_uuid, source_item in source_items.items():
-            source_item_widget = self.gui.main_view.source_list.itemWidget(source_item)
-            checkbox = source_item_widget.findChild(QCheckBox)
-            if checkbox.isChecked():
-                checked_source_uuids.append(source_uuid)
-        return checked_source_uuids
-
-    def maybe_toggle_delete_sources_button_enabled(self) -> None:
-        self.gui.toggle_delete_sources_button_enabled(len(self.get_checked_sources()) > 0)
+        # Store currently-selected sources
+        self._selected_sources: list[db.Source] | None = None
 
     @pyqtSlot(int)
     def _on_main_queue_updated(self, num_items: int) -> None:
@@ -624,6 +610,9 @@ class Controller(QObject):
         # may have attempted online mode login, then switched to offline)
         self.gui.clear_clipboard()
         self.gui.show_main_window()
+
+        # All child elements of main window should show logged_out state
+        self.gui.logout()
         self.update_sources()
 
     def on_action_requiring_login(self) -> None:
@@ -872,9 +861,13 @@ class Controller(QObject):
         """
         self.session.commit()  # Needed to flush stale data.
         message = storage.get_message(self.session, uuid)
-        self.message_ready.emit(message.source.uuid, message.uuid, message.content)
+        if message:
+            self.message_ready.emit(message.source.uuid, message.uuid, message.content)
+        else:
+            logger.error("Failed to find message uuid in database")
+            logger.debug(f"Message {uuid} missing from database but download successful")
 
-    def on_message_download_failure(self, exception: DownloadException) -> None:
+    def on_message_download_failure(self, exception: Exception) -> None:
         """
         Called when a message fails to download.
         """
@@ -884,12 +877,16 @@ class Controller(QObject):
             self._submit_download_job(exception.object_type, exception.uuid)
 
         self.session.commit()
-        try:
+        if isinstance(exception, DownloadException):
             message = storage.get_message(self.session, exception.uuid)
-            self.message_download_failed.emit(message.source.uuid, message.uuid, str(message))
-        except Exception as e:
-            logger.error("Could not emit message_download_failed")
-            logger.debug(f"Could not emit message_download_failed: {e}")
+            if message:
+                self.message_download_failed.emit(message.source.uuid, message.uuid, str(message))
+            else:
+                logger.warning("Message download failure for uuid not in database.")
+                logger.debug(f"Message {exception.uuid} missing from database, was it deleted?")
+        else:
+            logger.error(f"Unexpected exception: {type(exception)}")
+            logger.debug(f"Unexpected exception: {exception}")
 
     def download_new_replies(self) -> None:
         replies = storage.find_new_replies(self.session)
@@ -907,9 +904,13 @@ class Controller(QObject):
         """
         self.session.commit()  # Needed to flush stale data.
         reply = storage.get_reply(self.session, uuid)
-        self.reply_ready.emit(reply.source.uuid, reply.uuid, reply.content)
+        if reply:
+            self.reply_ready.emit(reply.source.uuid, reply.uuid, reply.content)
+        else:
+            logger.error("Reply downloaded but reply uuid missing from database")
+            logger.debug(f"Reply {uuid} downloaded but uuid missing from database")
 
-    def on_reply_download_failure(self, exception: DownloadException) -> None:
+    def on_reply_download_failure(self, exception: Exception) -> None:
         """
         Called when a reply fails to download.
         """
@@ -919,12 +920,17 @@ class Controller(QObject):
             self._submit_download_job(exception.object_type, exception.uuid)
 
         self.session.commit()
-        try:
+        if isinstance(exception, DownloadException):
             reply = storage.get_reply(self.session, exception.uuid)
-            self.reply_download_failed.emit(reply.source.uuid, reply.uuid, str(reply))
-        except Exception as e:
-            logger.error("Could not emit reply_download_failed")
-            logger.debug(f"Could not emit reply_download_failed: {e}")
+            if reply:
+                self.reply_download_failed.emit(reply.source.uuid, reply.uuid, str(reply))
+            else:
+                # Not necessarily an error, it may have been deleted. Warn.
+                logger.warning("Reply download failure for uuid not in database")
+                logger.debug(f"Reply {exception.uuid} not found in database")
+        else:
+            logger.error(f"Unexpected exception: {type(exception)}")
+            logger.debug(f"Unexpected exception: {exception}")
 
     def downloaded_file_exists(self, file: db.File, silence_errors: bool = False) -> bool:
         """
@@ -981,6 +987,12 @@ class Controller(QObject):
         """
         self.session.commit()
         file_obj = storage.get_file(self.session, uuid)
+        if not file_obj:
+            # This shouldn't happen
+            logger.error("File downloaded but uuid missing from database")
+            logger.debug(f"File {uuid} downloaded but uuid missing from database")
+            return
+
         file_obj.download_error = None
         storage.update_file_size(uuid, self.data_dir, self.session)
         self._state.record_file_download(state.FileId(uuid))
@@ -998,7 +1010,17 @@ class Controller(QObject):
         else:
             if isinstance(exception, DownloadDecryptionException):
                 logger.error("Failed to decrypt %s", exception.uuid)
-                f = self.get_file(exception.uuid)
+                f = storage.get_file(self.session, exception.uuid)
+                if not f:
+                    # This isn't necessarily an error; the file may have been deleted
+                    # at the server and has been removed from the database.
+                    logger.warning("File download failure for uuid not in database.")
+                    logger.debug(
+                        f"File download failure but uuid {exception.uuid} uuid not in database, "
+                        "was it deleted?"
+                    )
+                    return
+
                 self.file_missing.emit(f.source.uuid, f.uuid, str(f))
             self.gui.update_error_status(_("The file download failed. Please try again."))
 
@@ -1036,39 +1058,32 @@ class Controller(QObject):
             self.source_deletion_failed.emit(e.source_uuid)
 
     @login_required
-    def delete_source(self, source: db.Source) -> None:
+    def delete_sources(self, sources: list[db.Source]) -> None:
         """
-        Performs a delete operation on source record.
+        Performs a delete operation on one or more source records.
 
-        This method will submit a job to delete the source record on
-        the server. If the job succeeds, the success handler will
+        This method will submit a job to delete each target source record on
+        the server. If a given job succeeds, the success handler will
         synchronize the server records with the local state. If not,
         the failure handler will display an error.
         """
-        job = DeleteSourceJob(source.uuid)
-        job.success_signal.connect(self.on_delete_source_success)
-        job.failure_signal.connect(self.on_delete_source_failure)
+        for source in sources:
+            try:
+                # Accessing source.uuid requires the source object to be
+                # present in the database.
+                # To avoid passing and referencing orm objects, a simplified
+                # ViewModel layer decoupled from the db that presents data to the API/GUI
+                # would be another possibility.
+                job = DeleteSourceJob(source.uuid)
+            except sqlalchemy.orm.exc.ObjectDeletedError:
+                logger.warning("DeleteSourceJob requested but source already deleted")
+                return
 
-        self.add_job.emit(job)
-        self.source_deleted.emit(source.uuid)
-
-    @login_required
-    def delete_sources(self, sources: list[str]) -> None:
-        """
-        Performs a delete operation on multiple source records.
-
-        This method will submit a job per source to delete the source record on
-        the server. If the job succeeds, the success handler will
-        synchronize the server records with the local state. If not,
-        the failure handler will display an error.
-        """
-        for source_uuid in sources:
-            job = DeleteSourceJob(source_uuid)
             job.success_signal.connect(self.on_delete_source_success)
             job.failure_signal.connect(self.on_delete_source_failure)
 
             self.add_job.emit(job)
-            self.source_deleted.emit(source_uuid)
+            self.source_deleted.emit(source.uuid)
 
     @login_required
     def delete_conversation(self, source: db.Source) -> None:
@@ -1149,7 +1164,11 @@ class Controller(QObject):
         logger.info(f"{reply_uuid} sent successfully")
         self.session.commit()
         reply = storage.get_reply(self.session, reply_uuid)
-        self.reply_succeeded.emit(reply.source.uuid, reply_uuid, reply.content)
+        if reply:
+            self.reply_succeeded.emit(reply.source.uuid, reply_uuid, reply.content)
+        else:
+            logger.error("Reply uuid not found in database")
+            logger.debug(f"Reply {reply_uuid} uuid not found in database")
 
     def on_reply_failure(self, exception: SendReplyJobError | SendReplyJobTimeoutError) -> None:
         logger.debug(f"{exception.reply_uuid} failed to send")
@@ -1158,8 +1177,18 @@ class Controller(QObject):
         if isinstance(exception, SendReplyJobError):
             self.reply_failed.emit(exception.reply_uuid)
 
-    def get_file(self, file_uuid: str) -> db.File:
+    def get_file(self, file_uuid: str) -> db.File | None:
+        """
+        Wraps storage.py. GUI caller can use this method; internally, prioritize
+        storage.get_file.
+        """
         file = storage.get_file(self.session, file_uuid)
+        if not file:
+            # Not necessarily an error
+            logger.warning("get_file for uuid not in database")
+            logger.debug(f"File {file_uuid} not found in database")
+            return None
+
         self.session.refresh(file)
         return file
 
@@ -1179,3 +1208,16 @@ class Controller(QObject):
         failed_replies = storage.mark_all_pending_drafts_as_failed(self.session)
         for failed_reply in failed_replies:
             self.reply_failed.emit(failed_reply.uuid)
+
+    @pyqtSlot(object)
+    def on_receive_selected_sources(self, sources: list[db.Source]) -> None:
+        self._selected_sources = sources
+
+    def get_selected_sources(self) -> list[db.Source] | None:
+        return self._selected_sources
+
+    def get_source_count(self) -> int:
+        """
+        Return total sources in local storage.
+        """
+        return self.session.query(db.Source).count()

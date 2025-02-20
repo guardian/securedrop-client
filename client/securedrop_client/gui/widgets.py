@@ -36,15 +36,14 @@ from PyQt5.QtGui import (
     QFocusEvent,
     QFont,
     QIcon,
-    QKeySequence,
     QLinearGradient,
     QMouseEvent,
     QPalette,
     QResizeEvent,
 )
 from PyQt5.QtWidgets import (
+    QAbstractItemView,
     QAction,
-    QCheckBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -56,6 +55,7 @@ from PyQt5.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSpacerItem,
+    QStackedLayout,
     QStatusBar,
     QToolBar,
     QToolButton,
@@ -78,7 +78,6 @@ from securedrop_client.gui import conversation
 from securedrop_client.gui.actions import (
     DeleteConversationAction,
     DeleteSourceAction,
-    DeleteSourcesAction,
     DownloadConversation,
     ExportConversationAction,
     ExportConversationTranscriptAction,
@@ -87,8 +86,8 @@ from securedrop_client.gui.actions import (
 from securedrop_client.gui.base import SecureQLabel, SvgLabel, SvgPushButton, SvgToggleButton
 from securedrop_client.gui.conversation import DeleteConversationDialog
 from securedrop_client.gui.datetime_helpers import format_datetime_local
+from securedrop_client.gui.shortcuts import Shortcuts
 from securedrop_client.gui.source import DeleteSourceDialog
-from securedrop_client.gui.source.delete.dialog import DeleteSourcesDialog
 from securedrop_client.logic import Controller
 from securedrop_client.resources import load_css, load_icon, load_image, load_movie
 from securedrop_client.storage import source_exists
@@ -101,9 +100,9 @@ MINIMUM_ANIMATION_DURATION_IN_MILLISECONDS = 300
 NO_DELAY = 1
 
 
-class TopPane(QWidget):
+class BottomPane(QWidget):
     """
-    Top pane of the app window.
+    Bottom pane of the app window.
     """
 
     def __init__(self) -> None:
@@ -159,7 +158,7 @@ class TopPane(QWidget):
 
         activity_status_bar_spacer = QWidget()
 
-        # Set height of top pane to 42 pixels
+        # Set height of bottom pane to 42 pixels
         self.setFixedHeight(42)
         self.sync_icon.setFixedHeight(42)
         self.activity_status_bar.setFixedHeight(42)
@@ -219,14 +218,16 @@ class LeftPane(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        self.user_profile = UserProfile()
         self.branding_barre = QLabel()
         self.branding_barre.setPixmap(load_image("left_pane.svg"))
-        self.user_profile = UserProfile()
 
         # Hide user profile widget until user logs in
         self.user_profile.hide()
 
-        # Add widgets to layout
+        # Add widgets to layout. An improvement
+        # to this layout could be to set the branding barre as a
+        # background layout for the other elements
         layout.addWidget(self.user_profile)
         layout.addWidget(self.branding_barre)
 
@@ -428,6 +429,141 @@ class ErrorStatusBar(QWidget):
         self._hide()
 
 
+class InnerTopPane(QWidget):
+    """
+    Top pane of the MainView window. This pane holds the Batch Action layout,
+    and eventually will hold the keyword search/filter by codename bar.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("InnerTopPane")
+
+        # Use a vertical layout so that the keyword search bar can be added later
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.setAlignment(Qt.AlignVCenter)
+        self.setLayout(layout)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+
+        self.batch_actions = BatchActionWidget()
+        layout.addWidget(self.batch_actions)
+
+    def setup(self, controller: Controller) -> None:
+        self.batch_actions.setup(controller)
+
+    def set_logged_out(self) -> None:
+        """
+        Disable action toolbar if logged out.
+        """
+        self.batch_actions.toolbar.hide_action()
+
+    def set_logged_in(self) -> None:
+        """
+        Enable action toolbar if logged in.
+        """
+        self.batch_actions.toolbar.show_action()
+
+
+class BatchActionWidget(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+
+        # CSS style id
+        self.setObjectName("BatchActionWidget")
+
+        # Solid background colour
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        layout = QHBoxLayout()
+        self.setLayout(layout)
+
+        self.toolbar = BatchActionToolbar()
+
+        layout.addWidget(self.toolbar)
+        layout.addStretch()
+
+    def setup(self, controller: Controller) -> None:
+        self.toolbar.setup(controller)
+
+
+class BatchActionToolbar(QToolBar):
+    """
+    A toolbar that contains batch actions (actions that target multiple
+    sources in the ConversationView, and therefore don't belong in the
+    individual conversation menu). Currently, this widget will hold the
+    "Delete Sources" (batch-delete) action.
+
+    For user-facing naming consistency, these items won't be called
+    "batch/bulk <delete>", but simply "<verb> <noun>s" (eg "Delete Sources"), where
+    the original nomenclature comes from the individual Source overflow QAction menu
+    items. Each item may have a tooltip, visible on hover, that provides a more
+    lengthy explanation (e.g., "Delete multiple source accounts").
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("BatchActionToolbar")
+        self.setContentsMargins(0, 0, 0, 0)
+
+        palette = QPalette()
+        palette.setBrush(
+            QPalette.Background, QBrush(Qt.NoBrush)
+        )  # This makes the widget transparent
+        self.setPalette(palette)
+
+        # Style and attributes
+        self.setMovable(False)
+        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+
+        self.delete_sources_action = QAction(
+            QIcon(load_image("delete_sources_toolbar_icon.svg")), _("DELETE SOURCES"), self
+        )
+        self.delete_sources_action.setObjectName("BatchActionButton")
+        self.delete_sources_action.setToolTip(
+            _(
+                "Delete selected source accounts. "
+                "Ctrl+click sources below to select multiple sources."
+            )
+        )
+        self.delete_sources_action.triggered.connect(self.on_action_triggered)
+        self.button = self.widgetForAction(self.delete_sources_action)
+
+        # Add spacer. "select all" checkbox can replace the spacer in future
+        spacer = QWidget()
+        spacer.setFixedSize(14, 14)  # sourcewidget spacer size
+        self.addWidget(spacer)
+        self.addAction(self.delete_sources_action)
+
+    def setup(self, controller: Controller) -> None:
+        self.controller = controller
+
+    def hide_action(self) -> None:
+        self.delete_sources_action.setVisible(False)
+
+    def show_action(self) -> None:
+        self.delete_sources_action.setVisible(True)
+
+    @pyqtSlot()
+    def on_action_triggered(self) -> None:
+        if self.controller.api is None:
+            self.controller.on_action_requiring_login()
+        else:
+            # The current source selection is continuously received by the controller
+            # as the user selects and deselects; here we retrieve the selection
+            targets = self.controller.get_selected_sources()
+            source_count = self.controller.get_source_count()
+            if targets is not None:
+                dialog = DeleteSourceDialog(targets, source_count)
+                self._last_dialog = dialog  # FIXME: workaround for #2273
+                dialog.accepted.connect(lambda: self.controller.delete_sources(targets))
+                dialog.open()
+            else:
+                # No selected sources should return an empty set, not None
+                logger.error("Toolbar action triggered without valid data from controller.")
+
+
 class UserProfile(QLabel):
     """
     A widget that contains user profile information and options.
@@ -607,9 +743,17 @@ class LoginButton(QPushButton):
 
 class MainView(QWidget):
     """
-    Represents the main content of the application (containing the source list
-    and main context view).
+    Represents the main content of the application (containing the source list,
+    main context view, and top actions pane).
     """
+
+    # Index items for StackedLayout. CONVERSATION_INDEX should remain the
+    # biggest int value, for future ease of caching and cleaning up additional
+    # optional pages (eg rendered conversations) in higher index positions
+    NO_SOURCES_INDEX = 0
+    NOTHING_SELECTED_INDEX = 1
+    MULTI_SELECTED_INDEX = 2
+    CONVERSATION_INDEX = 3
 
     def __init__(
         self,
@@ -624,15 +768,25 @@ class MainView(QWidget):
         self.setObjectName("MainView")
 
         # Set layout
-        self._layout = QHBoxLayout(self)
-        self.setLayout(self._layout)
-
-        # Set margins and spacing
+        self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(0)
+        self.setLayout(self._layout)
+
+        # Top Pane to hold batch actions, eventually will also hold
+        # search bar for keyword filtering
+        self.top_pane = InnerTopPane()
+
+        # Hold main conversation view and sourcelist
+        inner_container = QHBoxLayout()
+
+        # Set margins and spacing
+        inner_container.setContentsMargins(0, 0, 0, 0)
+        inner_container.setSpacing(0)
 
         # Create SourceList widget
         self.source_list = SourceList()
+        self.source_list.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.source_list.itemSelectionChanged.connect(self.on_source_changed)
         if app_state is not None:
             self.source_list.source_selection_changed.connect(
@@ -643,27 +797,29 @@ class MainView(QWidget):
         # Create widgets
         self.view_holder = QWidget()
         self.view_holder.setObjectName("MainView_view_holder")
-        self.view_layout = QVBoxLayout()
+
+        # Layout where only one view shows at a time. Suitable for the case
+        # where we show either a conversation or a contextually-appropriate
+        # message ("Select a source...", "Nothing to see yet", etc)
+        self.view_layout = QStackedLayout()
         self.view_holder.setLayout(self.view_layout)
         self.view_layout.setContentsMargins(0, 0, 0, 0)
         self.view_layout.setSpacing(0)
-        self.empty_conversation_view = EmptyConversationView()
-        self.view_layout.addWidget(self.empty_conversation_view)
 
-        self.sources_pane_holder = QWidget()
-        # self.sources_pane_holder.setMaximumWidth(540)
-        self.sources_pane_holder.setObjectName("MainView_sources_pane_holder")
-        self.sources_pane_layout = QVBoxLayout()
-        self.sources_pane_layout.setContentsMargins(0, 0, 0, 0)
-        self.sources_pane_layout.setSpacing(0)
-        self.sources_pane_holder.setLayout(self.sources_pane_layout)
+        self.view_layout.insertWidget(self.NO_SOURCES_INDEX, EmptyConversationView())
+        self.view_layout.insertWidget(self.NOTHING_SELECTED_INDEX, NothingSelectedView())
+        self.view_layout.insertWidget(self.MULTI_SELECTED_INDEX, MultiSelectView())
 
-        self.sources_toolbar = SourceListToolbar()
-        self.sources_pane_layout.addWidget(self.sources_toolbar)
-        self.sources_pane_layout.addWidget(self.source_list)
+        # Placeholder widget at the CONVERSATION_INDEX, dynamically replaced by conversation view
+        # as soon as a source conversation is selected
+        self.view_layout.insertWidget(self.CONVERSATION_INDEX, NothingSelectedView())
 
-        self._layout.addWidget(self.sources_pane_holder, stretch=1)
-        self._layout.addWidget(self.view_holder, stretch=2)
+        # Add widgets to layout
+        inner_container.addWidget(self.source_list, stretch=1)
+        inner_container.addWidget(self.view_holder, stretch=2)
+
+        self._layout.addWidget(self.top_pane)
+        self._layout.addLayout(inner_container, stretch=1)
 
         # Note: We should not delete SourceConversationWrapper when its source is unselected. This
         # is a temporary solution to keep copies of our objects since we do delete them.
@@ -675,27 +831,24 @@ class MainView(QWidget):
         """
         self.controller = controller
         self.source_list.setup(controller)
-        self.sources_toolbar.setup(controller)
+        self.top_pane.setup(controller)
+
+    def set_logged_out(self) -> None:
+        """
+        Logged-out context. Called by parent.
+        """
+        self.top_pane.set_logged_out()
+
+    def set_logged_in(self) -> None:
+        """
+        Logged-in context. Called by parent.
+        """
+        self.top_pane.set_logged_in()
 
     def show_sources(self, sources: list[Source]) -> None:
         """
         Update the sources list in the GUI with the supplied list of sources.
         """
-        # If no sources are supplied, display the EmptyConversationView with the no-sources message.
-        #
-        # If there are sources but no source is selected in the GUI, display the
-        # EmptyConversationView with the no-source-selected messaging.
-        #
-        # Otherwise, hide the EmptyConversationView.
-        if not sources:
-            self.empty_conversation_view.show_no_sources_message()
-            self.empty_conversation_view.show()
-        elif not self.source_list.get_selected_source():
-            self.empty_conversation_view.show_no_source_selected_message()
-            self.empty_conversation_view.show()
-        else:
-            self.empty_conversation_view.hide()
-
         # If the source list in the GUI is empty, then we will run the optimized initial update.
         # Otherwise, do a regular source list update.
         if not self.source_list.source_items:
@@ -706,20 +859,96 @@ class MainView(QWidget):
                 # Then call the function to remove the wrapper and its children.
                 self.delete_conversation(source_uuid)
 
+        # Show the correct conversation pane gui element depending on
+        # the number of sources a) available and b) selected.
+        # An improved approach will be to create an `on_source_context_update`
+        # pyQtSlot that subscribes/listens for storage updates and calls
+        # `show_sources` and `show_conversation_context`.
+        self._on_update_conversation_context()
+
+    def _on_update_conversation_context(self) -> None:
+        """
+        Show the correct view type based on the number of available and selected sources.
+
+        If there are no sources, show the empty conversation view.
+        If there are sources, but none are selected, show the "Select a source" view.
+        If there are sources and exactly one has been selected, show the conversation
+        with that source.
+        If multiple sources are selected, show the "Multiple sources selected" view.
+
+        This method can be triggered by a click event (list index changed) or by a "sync"
+        event (sourcelist updated), which redraws the list.
+
+        In the latter case, supply list[Source] and set is_redraw_event to True.
+
+        Return number of selected sources.
+        """
+        selected = len(self.source_list.selectedItems())
+        if selected == 0 and self.source_list.count() == 0:
+            self.view_layout.setCurrentIndex(self.NO_SOURCES_INDEX)
+        elif selected == 0:
+            self.view_layout.setCurrentIndex(self.NOTHING_SELECTED_INDEX)
+        elif selected > 1:
+            self.view_layout.setCurrentIndex(self.MULTI_SELECTED_INDEX)
+        else:
+            # Exactly one source selected
+            self.view_layout.setCurrentIndex(self.CONVERSATION_INDEX)
+
+    @pyqtSlot()
     def on_source_changed(self) -> None:
         """
-        Show conversation for the selected source.
+        Show conversation for the selected source, or, if multiple sources are selected,
+        show multi select view.
+        """
+
+        selected = len(self.source_list.selectedItems())
+        if selected == 1:
+            # One source selected; prepare the conversation widget
+            try:
+                source = self.source_list.get_selected_source()
+
+                # Avoid race between user selection and remote deletion
+                if not source:
+                    return
+
+                self.controller.session.refresh(source)
+
+                # Immediately show the selected source as seen in the UI and then make a
+                # request to mark source as seen.
+                self.source_list.source_selected.emit(source.uuid)
+                self.controller.mark_seen(source)
+
+                # Get or create the SourceConversationWrapper
+                if source.uuid in self.source_conversations:
+                    conversation_wrapper = self.source_conversations[source.uuid]
+                    conversation_wrapper.conversation_view.update_conversation(  # type: ignore[has-type]
+                        source.collection
+                    )
+                else:
+                    conversation_wrapper = SourceConversationWrapper(
+                        source, self.controller, self._state
+                    )
+                    self.source_conversations[source.uuid] = conversation_wrapper
+
+                # Put this widget into the QStackedLayout at the correct position
+                self.set_conversation(conversation_wrapper)
+                logger.debug(f"Set conversation to the selected source with uuid: {source.uuid}")
+
+            except sqlalchemy.exc.InvalidRequestError as e:
+                logger.debug(e)
+
+        # Now show the right widget depending on the selection
+        self._on_update_conversation_context()
+
+    def refresh_source_conversations(self) -> None:
+        """
+        Refresh the selected source conversation.
         """
         try:
             source = self.source_list.get_selected_source()
             if not source:
                 return
-
             self.controller.session.refresh(source)
-
-            # Immediately show the selected source as seen in the UI and then make a request to mark
-            # source as seen.
-            self.source_list.source_selected.emit(source.uuid)
             self.controller.mark_seen(source)
 
             # Get or create the SourceConversationWrapper
@@ -734,26 +963,6 @@ class MainView(QWidget):
                 )
                 self.source_conversations[source.uuid] = conversation_wrapper
 
-            self.set_conversation(conversation_wrapper)
-            logger.debug(f"Set conversation to the selected source with uuid: {source.uuid}")
-
-        except sqlalchemy.exc.InvalidRequestError as e:
-            logger.debug(e)
-
-    def refresh_source_conversations(self) -> None:
-        """
-        Refresh the selected source conversation.
-        """
-        try:
-            source = self.source_list.get_selected_source()
-            if not source:
-                return
-            self.controller.session.refresh(source)
-            self.controller.mark_seen(source)
-            conversation_wrapper = self.source_conversations[source.uuid]
-            conversation_wrapper.conversation_view.update_conversation(  # type: ignore[has-type]
-                source.collection
-            )
         except sqlalchemy.exc.InvalidRequestError as e:
             logger.debug("Error refreshing source conversations: %s", e)
 
@@ -770,27 +979,26 @@ class MainView(QWidget):
         except KeyError:
             logger.debug(f"No SourceConversationWrapper for {source_uuid} to delete")
 
-    def set_conversation(self, widget: QWidget) -> None:
+    def set_conversation(self, conversation: SourceConversationWrapper) -> None:
         """
-        Update the view holder to contain the referenced widget.
+        Replace rendered conversation at CONVERSATION_INDEX. Does not change
+        QStackedLayout current index.
         """
-        old_widget = self.view_layout.takeAt(0)
+        self.view_layout.insertWidget(self.CONVERSATION_INDEX, conversation)
 
-        if old_widget and old_widget.widget():
-            old_widget.widget().hide()
-
-        self.empty_conversation_view.hide()
-        self.view_layout.addWidget(widget)
-        widget.show()
-
-    def toggle_delete_sources_button_enabled(self, enabled: bool) -> None:
-        """
-        Enable / disable the delete sources button.
-        """
-        self.sources_toolbar.delete_sources_action.setEnabled(enabled)
+        # At the moment, we don't keep these widgets as pages in the stacked layout,
+        # and we store an in-memory dict of {uuids: widget}s to avoid recreating a widget every
+        # time a conversation is revisited. A fixed-size cache could be implemented here instead.
+        layoutitem = self.view_layout.itemAt(self.CONVERSATION_INDEX + 1)
+        if layoutitem:
+            self.view_layout.removeWidget(layoutitem.widget())
 
 
-class EmptyConversationView(QWidget):
+class ConversationPaneView(QWidget):
+    """
+    Base widget element for the ConversationPane.
+    """
+
     MARGIN = 30
     NEWLINE_HEIGHT_PX = 35
 
@@ -798,17 +1006,20 @@ class EmptyConversationView(QWidget):
         super().__init__()
 
         self.setObjectName("EmptyConversationView")
+        self._layout = QVBoxLayout()
+        self.setContentsMargins(self.MARGIN, self.MARGIN, self.MARGIN, self.MARGIN)
+        self._layout.setAlignment(Qt.AlignCenter)
+        self.setLayout(self._layout)
 
-        # Set layout
-        layout = QHBoxLayout()
-        layout.setContentsMargins(self.MARGIN, self.MARGIN, self.MARGIN, self.MARGIN)
-        self.setLayout(layout)
 
-        # Create widgets
-        self.no_sources = QWidget()
-        self.no_sources.setObjectName("EmptyConversationView_no_sources")
-        no_sources_layout = QVBoxLayout()
-        self.no_sources.setLayout(no_sources_layout)
+class EmptyConversationView(ConversationPaneView):
+    """
+    Displayed in conversation pane when sourcelist is empty.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
         no_sources_instructions = QLabel(_("Nothing to see just yet!"))
         no_sources_instructions.setObjectName("EmptyConversationView_instructions")
         no_sources_instructions.setWordWrap(True)
@@ -820,16 +1031,21 @@ class EmptyConversationView(QWidget):
             _("This is where you will read messages, reply to sources, and work with files.")
         )
         no_sources_instruction_details2.setWordWrap(True)
-        no_sources_layout.addWidget(no_sources_instructions)
-        no_sources_layout.addSpacing(self.NEWLINE_HEIGHT_PX)
-        no_sources_layout.addWidget(no_sources_instruction_details1)
-        no_sources_layout.addSpacing(self.NEWLINE_HEIGHT_PX)
-        no_sources_layout.addWidget(no_sources_instruction_details2)
+        self._layout.addWidget(no_sources_instructions)
+        self._layout.addSpacing(self.NEWLINE_HEIGHT_PX)
+        self._layout.addWidget(no_sources_instruction_details1)
+        self._layout.addSpacing(self.NEWLINE_HEIGHT_PX)
+        self._layout.addWidget(no_sources_instruction_details2)
 
-        self.no_source_selected = QWidget()
-        self.no_source_selected.setObjectName("EmptyConversationView_no_source_selected")
-        no_source_selected_layout = QVBoxLayout()
-        self.no_source_selected.setLayout(no_source_selected_layout)
+
+class NothingSelectedView(ConversationPaneView):
+    """
+    Displayed in conversation pane when sources are present but none are selected.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
         no_source_selected_instructions = QLabel(_("Select a source from the list, to:"))
         no_source_selected_instructions.setObjectName("EmptyConversationView_instructions")
         no_source_selected_instructions.setWordWrap(True)
@@ -860,36 +1076,50 @@ class EmptyConversationView(QWidget):
         bullet3_layout.addWidget(bullet3_bullet)
         bullet3_layout.addWidget(QLabel(_("Send a response")))
         bullet3_layout.addStretch()
-        no_source_selected_layout.addWidget(no_source_selected_instructions)
-        no_source_selected_layout.addSpacing(self.NEWLINE_HEIGHT_PX)
-        no_source_selected_layout.addWidget(bullet1)
-        no_source_selected_layout.addWidget(bullet2)
-        no_source_selected_layout.addWidget(bullet3)
-        no_source_selected_layout.addSpacing(self.NEWLINE_HEIGHT_PX * 4)
-
-        # Add widgets
-        layout.addWidget(self.no_sources, alignment=Qt.AlignCenter)
-        layout.addWidget(self.no_source_selected, alignment=Qt.AlignCenter)
-
-    def show_no_sources_message(self) -> None:
-        self.no_sources.show()
-        self.no_source_selected.hide()
-
-    def show_no_source_selected_message(self) -> None:
-        self.no_sources.hide()
-        self.no_source_selected.show()
+        no_source_selected_end_instructions = QLabel(
+            _("Or, select multiple sources with Ctrl+click.")
+        )
+        no_source_selected_end_instructions.setObjectName("EmptyConversationView_instructions")
+        no_source_selected_end_instructions.setWordWrap(True)
+        self._layout.addWidget(no_source_selected_instructions)
+        self._layout.addSpacing(self.NEWLINE_HEIGHT_PX)
+        self._layout.addWidget(bullet1)
+        self._layout.addWidget(bullet2)
+        self._layout.addWidget(bullet3)
+        self._layout.addSpacing(self.NEWLINE_HEIGHT_PX * 4)
+        self._layout.addWidget(no_source_selected_end_instructions)
+        self._layout.addSpacing(self.NEWLINE_HEIGHT_PX * 4)
 
 
-class SourceListToolbar(QToolBar):
-    def setup(self, controller: Controller) -> None:
-        self.setFixedHeight(30)
-        self.controller = controller
-        self.delete_sources_action = DeleteSourcesAction(self, self.controller, DeleteSourcesDialog)
-        self.addAction(self.delete_sources_action)
+class MultiSelectView(ConversationPaneView):
+    """
+    Displayed in conversation pane when multiple sources are selected.
+    """
 
     def __init__(self) -> None:
         super().__init__()
-        self.setObjectName("SourceListToolbar")
+        multi_sources_instructions = QLabel(_("Multiple Sources Selected"))
+        multi_sources_instructions.setObjectName("EmptyConversationView_instructions")
+        multi_sources_instructions.setWordWrap(True)
+        multi_sources_instruction_details1 = QLabel(
+            _(
+                "Select or de-select sources using Ctrl+click, Shift+click, "
+                "or by dragging the mouse."
+            )
+        )
+        multi_sources_instruction_details1.setWordWrap(True)
+        multi_sources_instruction_details2 = QLabel(
+            _(
+                "Use the top toolbar to delete multiple sources at once. "
+                "You will be shown a confirmation dialog before anything is deleted."
+            )
+        )
+        multi_sources_instruction_details2.setWordWrap(True)
+        self._layout.addWidget(multi_sources_instructions)
+        self._layout.addSpacing(self.NEWLINE_HEIGHT_PX)
+        self._layout.addWidget(multi_sources_instruction_details1)
+        self._layout.addSpacing(self.NEWLINE_HEIGHT_PX)
+        self._layout.addWidget(multi_sources_instruction_details2)
 
 
 class SourceListWidgetItem(QListWidgetItem):
@@ -914,8 +1144,12 @@ class SourceList(QListWidget):
     Displays the list of sources.
     """
 
+    # State machine signals
     source_selection_changed = pyqtSignal(state.SourceId)
     source_selection_cleared = pyqtSignal()
+
+    # Bulk-context signal (toolbar)
+    selected_sources = pyqtSignal(object)  # list[Source]
 
     NUM_SOURCES_TO_ADD_AT_A_TIME = 32
     INITIAL_UPDATE_SCROLLBAR_WIDTH = 20
@@ -991,9 +1225,6 @@ class SourceList(QListWidget):
 
             deleted_uuids.append(source_widget.source_uuid)
             source_widget.deleteLater()
-
-        # We may need disable the delete multiple sources button
-        self.controller.maybe_toggle_delete_sources_button_enabled()
 
         # Update the remaining widgets
         for i in range(self.count()):
@@ -1072,6 +1303,7 @@ class SourceList(QListWidget):
         QTimer.singleShot(1, schedule_source_management)
 
     def get_selected_source(self) -> Optional[Source]:
+        # if len == 0, return None
         if not self.selectedItems():
             return None
 
@@ -1117,11 +1349,28 @@ class SourceList(QListWidget):
 
     @pyqtSlot()
     def _on_item_selection_changed(self) -> None:
-        source = self.get_selected_source()
-        if source is not None:
-            self.source_selection_changed.emit(state.SourceId(source.uuid))
+        """
+        0..n items may be selected. If multiple items are selected, to avoid confusion,
+        don't preview any individual source conversation, but instead show a contextual message.
+        """
+
+        logger.debug(f"{len(self.selectedItems())} selected")
+        selected = []
+        for item in self.selectedItems():
+            widget = self.itemWidget(item)
+            if isinstance(widget, SourceWidget):
+                selected.append(widget.source)
+
+        # Show conversation view if one source selected
+        if len(selected) == 1:
+            source = self.get_selected_source()
+            if source:
+                self.source_selection_changed.emit(state.SourceId(source.uuid))
         else:
             self.source_selection_cleared.emit()
+
+        # Update listeners (action toolbar) with current selection
+        self.selected_sources.emit(selected)
 
 
 class SourcePreview(SecureQLabel):
@@ -1281,7 +1530,6 @@ class SourceWidget(QWidget):
     SOURCE_NAME_CSS = load_css("source_name.css")
     SOURCE_PREVIEW_CSS = load_css("source_preview.css")
     SOURCE_TIMESTAMP_CSS = load_css("source_timestamp.css")
-    SOURCE_CHECKBOX_CSS = load_css("source_checkbox.css")
 
     CONVERSATION_DELETED_TEXT = _("\u2014 All files and messages deleted for this source \u2014")
 
@@ -1342,11 +1590,6 @@ class SourceWidget(QWidget):
         self.paperclip_disabled.setSizePolicy(retain_space)
         self.paperclip_disabled.hide()
 
-        self.checkbox = QCheckBox()
-        self.checkbox.setObjectName("SourceWidget_checkbox")
-        self.checkbox.setStyleSheet(self.SOURCE_CHECKBOX_CSS)
-        self.checkbox.toggled.connect(controller.maybe_toggle_delete_sources_button_enabled)
-
         self.timestamp = QLabel()
         self.timestamp.setSizePolicy(retain_space)
         self.timestamp.setFixedWidth(self.TIMESTAMP_WIDTH)
@@ -1375,7 +1618,6 @@ class SourceWidget(QWidget):
         source_widget_layout.addWidget(self.name, 0, 2, 1, 1)
         source_widget_layout.addWidget(self.paperclip, 0, 3, 1, 1)
         source_widget_layout.addWidget(self.paperclip_disabled, 0, 3, 1, 1)
-        source_widget_layout.addWidget(self.checkbox, 1, 0, 1, 1)
         source_widget_layout.addWidget(self.preview, 1, 2, 1, 1, alignment=Qt.AlignLeft)
         source_widget_layout.addWidget(self.deletion_indicator, 1, 2, 1, 1)
         source_widget_layout.addWidget(self.timestamp, 1, 3, 1, 1)
@@ -2284,7 +2526,7 @@ class FileWidget(QWidget):
 
     def __init__(
         self,
-        file_uuid: str,
+        file: File,
         controller: Controller,
         file_download_started: pyqtBoundSignal,
         file_ready_signal: pyqtBoundSignal,
@@ -2299,8 +2541,8 @@ class FileWidget(QWidget):
 
         self.controller = controller
 
-        self.file = self.controller.get_file(file_uuid)
-        self.uuid = file_uuid
+        self.file = file
+        self.uuid = file.uuid
         self.index = index
         self.downloading = False
 
@@ -2538,16 +2780,20 @@ class FileWidget(QWidget):
         of the file distinguishes which function in the logic layer to call.
         """
         # update state
-        self.file = self.controller.get_file(self.uuid)
-
-        if self.file.is_decrypted:
-            # Open the already downloaded and decrypted file.
-            self.controller.on_file_open(self.file)
-        elif not self.downloading:
-            if self.controller.api:
-                self.start_button_animation()
-            # Download the file.
-            self.controller.on_submission_download(File, self.uuid)
+        file = self.controller.get_file(self.uuid)
+        if file is None:
+            # the record was deleted from the database, so delete the widget.
+            self.deleteLater()
+        else:
+            self.file = file
+            if self.file.is_decrypted:
+                # Open the already downloaded and decrypted file.
+                self.controller.on_file_open(self.file)
+            elif not self.downloading:
+                if self.controller.api:
+                    self.start_button_animation()
+                # Download the file.
+                self.controller.on_submission_download(File, self.uuid)
 
     def start_button_animation(self) -> None:
         """
@@ -2575,8 +2821,12 @@ class FileWidget(QWidget):
         Stops the download animation and restores the button to its default state.
         """
         self.download_animation.stop()
-        self.file = self.controller.get_file(self.file.uuid)
-        self._set_file_state()
+        file = self.controller.get_file(self.file.uuid)
+        if file is None:
+            self.deleteLater()
+        else:
+            self.file = file
+            self._set_file_state()
 
 
 class ConversationScrollArea(QScrollArea):
@@ -2904,9 +3154,11 @@ class ConversationView(QWidget):
         """
         Add a file from the source.
         """
+        # If we encounter any issues with FileWidget rendering updated information, the
+        # reference can be refreshed here before the widget is created.
         logger.debug(f"Adding file for {file.uuid}")
         conversation_item = FileWidget(
-            file.uuid,
+            file,
             self.controller,
             self.controller.file_download_started,
             self.controller.file_ready,
@@ -3193,7 +3445,7 @@ class ReplyBoxWidget(QWidget):
         send_button_icon.addPixmap(load_image("send-disabled.svg"), QIcon.Disabled)
         self.send_button.setIcon(send_button_icon)
         self.send_button.setIconSize(QSize(56, 47))
-        self.send_button.setShortcut(QKeySequence("Ctrl+Return"))
+        self.send_button.setShortcut(Shortcuts.SEND.value)
         self.send_button.setDefault(True)
 
         # Set cursor.
@@ -3454,9 +3706,12 @@ class SourceMenu(QMenu):
 
     This menu provides below functionality via menu actions:
 
-    1. Delete source
-
-    Note: At present this only supports "delete" operation.
+    * Delete Source
+    * Delete Conversation
+    * Download Files
+    * Export Transcript
+    * Export Conversation and Transcript
+    * Print Transcript
     """
 
     SOURCE_MENU_CSS = load_css("source_menu.css")

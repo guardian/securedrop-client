@@ -11,7 +11,7 @@ from securedrop_client.logic import Controller
 from tests import factory
 
 
-@pytest.fixture()
+@pytest.fixture
 def main_window(mocker, homedir):
     # Setup
     app = QApplication([])
@@ -32,6 +32,7 @@ def main_window(mocker, homedir):
         )
         controller.authenticated_user = factory.User()
         controller.qubes = False
+        mocker.patch("securedrop_client.logic.Controller.get_source_count", return_value=1)
         gui.setup(controller)
 
         # Create a source widget
@@ -63,7 +64,7 @@ def main_window(mocker, homedir):
     app.exit()
 
 
-@pytest.fixture()
+@pytest.fixture
 def main_window_no_key(mocker, homedir):
     # Setup
     app = QApplication([])
@@ -84,6 +85,7 @@ def main_window_no_key(mocker, homedir):
         )
         controller.authenticated_user = factory.User()
         controller.qubes = False
+        mocker.patch("securedrop_client.logic.Controller.get_source_count", return_value=1)
         gui.setup(controller)
 
         # Create a source widget
@@ -115,7 +117,7 @@ def main_window_no_key(mocker, homedir):
     app.exit()
 
 
-@pytest.fixture()
+@pytest.fixture
 def modal_dialog(mocker, homedir):
     app = QApplication([])
     gui = Window()
@@ -135,6 +137,7 @@ def modal_dialog(mocker, homedir):
         )
         controller.authenticated_user = factory.User()
         controller.qubes = False
+        mocker.patch("securedrop_client.logic.Controller.get_source_count", return_value=1)
         gui.setup(controller)
         gui.login_dialog.close()
         dialog = ModalDialog()
@@ -146,7 +149,7 @@ def modal_dialog(mocker, homedir):
     app.exit()
 
 
-@pytest.fixture()
+@pytest.fixture
 def mock_export(mocker):
     export = Export()
 
@@ -164,7 +167,7 @@ def mock_export(mocker):
     return export
 
 
-@pytest.fixture()
+@pytest.fixture
 def print_dialog(mocker, homedir, mock_export):
     app = QApplication([])
     gui = Window()
@@ -187,6 +190,7 @@ def print_dialog(mocker, homedir, mock_export):
         )
         controller.authenticated_user = factory.User()
         controller.qubes = False
+        mocker.patch("securedrop_client.logic.Controller.get_source_count", return_value=1)
         gui.setup(controller)
         gui.login_dialog.close()
         dialog = conversation.PrintDialog(mock_export, "file_name", ["/mock/export/file"])
@@ -198,7 +202,7 @@ def print_dialog(mocker, homedir, mock_export):
     app.exit()
 
 
-@pytest.fixture()
+@pytest.fixture
 def export_file_wizard(mocker, homedir, mock_export):
     app = QApplication([])
     gui = Window()
@@ -218,6 +222,7 @@ def export_file_wizard(mocker, homedir, mock_export):
         )
         controller.authenticated_user = factory.User()
         controller.qubes = False
+        mocker.patch("securedrop_client.logic.Controller.get_source_count", return_value=1)
         gui.setup(controller)
         gui.login_dialog.close()
         dialog = conversation.ExportWizard(mock_export, "file_name", ["/mock/export/filepath"])
